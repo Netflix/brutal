@@ -9,7 +9,6 @@ from brutal.protocols.core import ProtocolBackend
 from brutal.core.plugin import BotPlugin
 from brutal.core.models import Event, Action
 from brutal.protocols.irc import IrcBotProtocol
-#from brutal.protocols.jabber import
 
 from brutal.core.constants import *
 
@@ -250,32 +249,12 @@ class Bot(object):
 
     def build_event(self, event_data):
         #todo: needs to be safe
-        # this should probably be moved into the model
-
-        #{'connection_id': '9ee03700-8869-11e2-a78f-406c8f1e1202',
-        # 'connection': <IrcBackend 9ee03700-8869-11e2-a78f-406c8f1e1202>,
-        # 'meta': {'body': '!ping',
-        #          'from': 'cbertram!~cbertram@dc1-corp.netflix.com'},
-        # 'scope': 'public',
-        # 'type': 'message',
-        # 'channel': '#wat'
-
-        # source:
-        #   <connection>
-        #   <room>
-        # type: <message>
-        # scope: <public>
-        # meta: <meta>
-
-        e = Event(source_bot=self, raw_details=event_data)
-        # channel=channel, type=event_type, meta=metadata, server_info=server_info,#version=event_version)
-        return e
-
-    # @defer.inlineCallbacks
-    # # old & busted.
-    # def handle_event(self, event):
-    #     response = yield threads.deferToThread(self.process_event, event)
-    #     defer.returnValue(event)
+        try:
+            e = Event(source_bot=self, raw_details=event_data)
+        except Exception as e:
+            log.err('failed to build event from {0!r}: {1!r}'.format(event_data, e))
+        else:
+            return e
 
     # DAT NEW HOT FIRE CMD EXECUTION
     @defer.inlineCallbacks
@@ -290,7 +269,7 @@ class Bot(object):
         for name, event_parser in self.event_parsers.items():
             if getattr(event_parser, '__brutal_threaded', False):
                 log.msg('executing event_parser {0!r} in thread'.format(name), logLevel=logging.DEBUG)
-                response = yield event_parser(event)
+                response = yield threads.deferToThread(event_parser, event)
             else:
                 log.msg('executing event_parser {0!r}'.format(name), logLevel=logging.DEBUG)
                 #try:
@@ -307,7 +286,7 @@ class Bot(object):
             cmd_func = self.commands[event.cmd]
             if getattr(cmd_func, '__brutal_threaded', False):
                 log.msg('executing cmd {0!r} on event {1!r} in thread'.format(event.cmd, event), logLevel=logging.DEBUG)
-                response = yield cmd_func(event)
+                response = yield threads.deferToThread(cmd_func, event)
             else:
                 log.msg('executing cmd {0!r} on event {1!r}'.format(event.cmd, event), logLevel=logging.DEBUG)
                 response = yield cmd_func(event)
@@ -319,6 +298,7 @@ class Bot(object):
 
         # do we actually want to return the event?
         defer.returnValue(event)
+
 
 class BotManager(object):
     """
