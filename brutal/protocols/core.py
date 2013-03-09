@@ -73,4 +73,5 @@ class ProtocolBackend(object):
         """
         should connect the client
         """
+        #TODO: find a way to delay connections (have it be user definable in the config) reactor.callLater
         raise NotImplementedError
