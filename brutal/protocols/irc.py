@@ -20,17 +20,17 @@ def irc_event_parser(raw_event):
             else:
                 raw_event['meta']['username'] = username
 
-    raw_event['event_version'] = self.event_version or None
+    raw_event['event_version'] = event_version or None
 
     # server info - protocol_name probably useles...
-    server_info = {'protocol': self.__class__.__name__, 'hostname': self.hostname}
+    #server_info = {'protocol': self.__class__.__name__, 'hostname': self.hostname}
     #hostname gets changed on connection RPL_WELCOMEMSG
     try:
-        server_info['addr'] = self.transport.addr[0]
+        server_info['addr'] = transport.addr[0]
     except Exception:
         server_info['addr'] = None
     try:
-        server_info['port'] = self.transport.addr[1]
+        server_info['port'] = transport.addr[1]
     except Exception:
         server_info['port'] = None
 
@@ -393,6 +393,7 @@ class SimpleIrcBotProtocol(irc.IRCClient):
         log.msg('irc acting on {0!r}'.format(action), logLevel=logging.DEBUG)
         pass
 
+
 class IrcBotClient(protocol.ReconnectingClientFactory):
     protocol = SimpleIrcBotProtocol
 
@@ -463,6 +464,9 @@ class IrcBackend(ProtocolBackend):
         """
         starts connection on reactor
         """
+        # if use_ssl:
+        #     reactor.connectSSL
+        log.msg('connecting to {0}:{1} with nick {2!r}'.format(self.server, self.port, self.nick), logLevel=logging.DEBUG)
         reactor.connectTCP(self.server, self.port, self.client)
 
     def handle_action(self, action):

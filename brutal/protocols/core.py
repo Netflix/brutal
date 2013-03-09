@@ -40,11 +40,11 @@ class ProtocolBackend(object):
         if isinstance(event, Event):
             event.connection = self
             event.connection_id = self.id
-            self.bot.event_queue.put(event)
+            self.bot.new_event(event)
         elif isinstance(event, dict):
             event['connection'] = self
             event['connection_id'] = self.id
-            self.bot.event_queue.put(event)
+            self.bot.new_event(event)
         else:
             log.err('invalid Event passed to {0}')
 
