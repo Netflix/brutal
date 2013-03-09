@@ -2,7 +2,7 @@ import time
 #from Queue import Queue
 from twisted.python import log
 
-from brutal.core.constants import DEFAULT_EVENT_VERSION
+from brutal.core.constants import DEFAULT_EVENT_VERSION, DEFAULT_ACTION_VERSION
 
 
 class Event(object):
@@ -29,7 +29,7 @@ class Event(object):
         self.cmd = None
         self.args = None
 
-        self.source_connection = None
+        self.source_connection_id = None
         self.source_room = None
         self.scope = None
         self.event_type = None
@@ -55,7 +55,7 @@ class Event(object):
         if not isinstance(self.raw_details, dict):
             raise TypeError
 
-        self.source_connection = self.raw_details.get('connection_id')
+        self.source_connection_id = self.raw_details.get('connection_id')
         self.source_room = self.raw_details.get('channel') or self.raw_details.get('room')
         self.scope = self.raw_details.get('scope')
         self.type = self.raw_details.get('type')
@@ -116,19 +116,34 @@ class Action(object):
         join
         part
     """
-    def __init__(self, destination_bots, channel=None, type=None, meta=None, server_info=None, version=None):
-        #unsure
-        self.destination_bots = destination_bots
+    def __init__(self, source_bot, source_event, destination_bots=None, destination_connections=None, room=None,
+                 action_type=None, meta=None):
 
-        self.channel = channel
-        self.type = type
+        #TODO: fix this awful import issue
+        from brutal.core.bot import Bot
+
+        if not isinstance(source_bot, Bot) or not isinstance(source_event, Event):
+            raise TypeError
+
+        self.source_bot = source_bot
+        self.source_event = source_event
+        self.destination_bots = destination_bots or [self.source_bot, ]
+        self.destination_connections = destination_connections or [self.source_event.source_connection_id]
+        self.time_stamp = time.time()
+
+        self.action_version = DEFAULT_ACTION_VERSION
+
+        self.destination_room = room
+        if self.destination_room is None:
+            if source_event.source_room is not None:
+                self.destination_room = source_event.source_room
+        self.scope = None
+        self.action_type = action_type
         self.meta = meta or {}
 
-        self.server_info = server_info or {}
-        self.version = version
-
     def __repr__(self):
-        return "<{0} {1}:{2}:{3}>".format(self.__class__.__name__, self.destination_bots, self.type, self.channel)
+        return "<{0} {1}:{2} dest:{3}>".format(self.__class__.__name__, self.source_bot.nick, self.action_type,
+                                               [bot.nick for bot in self.destination_bots])
 
     def _is_valid(self):
         """
@@ -142,14 +157,17 @@ class Action(object):
                 self.meta[key] = value
                 return True
 
-    def msg(self, channel, msg):
+    def msg(self, msg, room=None):
         """
         send a msg to a channel
         """
-        self.channel = channel
-        self.type = 'msg'
+        if room:
+            self.destination_room = room
+
+        self.action_type = 'message'
         if msg is not None:
-            self._add_to_meta('msg', msg)
+            self.meta['body'] = msg
+            #self._add_to_meta('body', msg)
         return self
 
     def join(self, channel, key=None):
