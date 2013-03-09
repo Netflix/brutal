@@ -6,7 +6,7 @@ from brutal.core.models import Event, Action
 #plugin.respond_to_self?
 
 
-def cmd(func=None, command=None, thread=True):
+def cmd(func=None, command=None, thread=False):
     """
     this decorator is used to create a command the bot will respond to.
     """
