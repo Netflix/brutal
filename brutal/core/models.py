@@ -1,30 +1,70 @@
-from Queue import Queue
+import time
+#from Queue import Queue
+from twisted.python import log
+
+from brutal.core.constants import DEFAULT_EVENT_VERSION
+
 
 class Event(object):
     """
+    This is the generic object which is used to handle objects received
     Gets generated for every single event the bot _receives_.
     """
 
-    def __init__(self, source_bot, channel, type, meta=None, server_info=None, version=None):
-        #TODO: NOT GENERIC ENOUGH
+    def __init__(self, source_bot, raw_details):  # channel, type, meta=None, server_info=None, version=None):
+        """
+        source_bot: the source bot the event was generated from
+
+        details:
+            conn: if given, the source connection the event was generated from
+            type
+            meta
+            version
+        """
         self.source_bot = source_bot
+        self.raw_details = raw_details
+        self.time_stamp = time.time()
+
+        self.event_version = DEFAULT_EVENT_VERSION
+        self.cmd = None
+        self.args = None
+
+        self.source_connection = None
+        self.source_room = None
+        self.scope = None
+        self.event_type = None
+        self.meta = None
+
+        # TODO: move so that the bot actually calls this and passes in its list of accepted tokens
+        self.parse_details()
+
         # probably needs to know which protocol...
-
-        self.channel = channel or '' #defaults to just the bots core log.
-        self.type = type
-        self.meta = meta or {}
-
-        self.server_info = server_info or {}
-        self.version = version or '1' #todo: figure out how to handle these...
-
-        #TODO: this is temporary until i decide how i want to handle cmds
-        self.cmd = self.parse_event_cmd()
+        # self.server_info = server_info or {}
+        # self.version = version or '1' #todo: figure out how to handle these...
 
         # this might be too heavy...
-        self.response = Queue()
+        # self.response = Queue()
 
     def __repr__(self):
-        return "<{0} {1}:{2}:{3}>".format(self.__class__.__name__, self.source_bot, self.type, self.channel)
+        return "<{0} {1}:{2}>".format(self.__class__.__name__, self.source_bot.nick, self.type)
+
+    def __str__(self):
+        return repr(self)
+
+    def parse_details(self):
+        if not isinstance(self.raw_details, dict):
+            raise TypeError
+
+        self.source_connection = self.raw_details.get('connection_id')
+        self.source_room = self.raw_details.get('channel') or self.raw_details.get('room')
+        self.scope = self.raw_details.get('scope')
+        self.type = self.raw_details.get('type')
+        self.meta = self.raw_details.get('meta')
+
+        if self.type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
+            res = self.parse_event_cmd(self.meta['body'])
+            if res is not None:
+                self.cmd, self.args = res
 
     def check_message_match(self, starts_with=None, regex=None):
         """
@@ -45,28 +85,26 @@ class Event(object):
                     return False
             return match
 
-    def parse_event_cmd(self, token=None):
-        token = token or '!' #TODO: make this configurable
-        cmd = None
-        if 'msg' in self.meta and self.meta['msg'] is not None and type(self.meta['msg']) in (str, unicode):
-            split = self.meta['msg'].split()
-            if len(split):
-                if split[0].startswith(token):
-                    try:
-                        cmd = split[0][1:]
-                        args = split[1:]
-                    except Exception:
-                        pass
-                    else:
-                        self.meta['cmd'] = cmd
-                        self.meta['args'] = args
-        return cmd
+    def parse_event_cmd(self, body, token=None):
+        token = token or '!'  # TODO: make this configurable
+        if type(body) not in (str, unicode):
+            return
 
-    def add_response_action(self, action):
-        if isinstance(action, Action):
-            self.response.put(action)
+        split = body.split()
+        if len(split):
+            if split[0].startswith(token):
+                try:
+                    cmd = split[0][1:]
+                    args = split[1:]
+                except Exception as e:
+                    log.err('failed parsing cmd from {0!r}: {1!r}'.format(body, e))
+                else:
+                    return cmd, args
 
-#class ActionGroup
+    #def add_response_action(self, action):
+        #if isinstance(action, Action):
+            #self.response.put(action)
+
 
 class Action(object):
     """
@@ -78,19 +116,19 @@ class Action(object):
         join
         part
     """
-    def __init__(self, destination_bot, channel=None, type=None, meta=None, server_info=None, version=None):
+    def __init__(self, destination_bots, channel=None, type=None, meta=None, server_info=None, version=None):
         #unsure
-        self.destination_bot = destination_bot
+        self.destination_bots = destination_bots
 
         self.channel = channel
         self.type = type
-        self.meta =  meta or {}
+        self.meta = meta or {}
 
         self.server_info = server_info or {}
         self.version = version
 
     def __repr__(self):
-        return "<{0} {1}:{2}:{3}>".format(self.__class__.__name__, self.destination_bot, self.type, self.channel)
+        return "<{0} {1}:{2}:{3}>".format(self.__class__.__name__, self.destination_bots, self.type, self.channel)
 
     def _is_valid(self):
         """
