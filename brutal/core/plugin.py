@@ -5,12 +5,15 @@ from brutal.core.models import Event, Action
 #plugin.respond_to_bots?
 #plugin.respond_to_self?
 
+
 def cmd(func=None, command=None, thread=True):
     """
     this decorator is used to create a command the bot will respond to.
     """
     def decorator(func):
         func.__brutal_cmd = True
+        if thread is True:
+            func.__brutal_threaded = True
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -76,9 +79,12 @@ class BotPlugin(object):
         don't touch me. plz?
 
         each bot that spins up, loads its own plugin instance
+
+        TODO: move the stuff in here to a separate func and call it after we initialize the instance.
+            that way they can do whatever they want in init
         """
         self.bot = bot
-        self.active = False # is this instance active?
+        self.active = False  # is this instance active?
 
     def action(self):
         if self.bot is not None:
