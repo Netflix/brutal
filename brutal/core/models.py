@@ -116,21 +116,31 @@ class Action(object):
         join
         part
     """
-    def __init__(self, source_bot, source_event, destination_bots=None, destination_connections=None, room=None,
+    def __init__(self, source_bot, source_event=None, destination_bots=None, destination_connections=None, room=None,
                  action_type=None, meta=None):
 
         #TODO: fix this awful import issue
         from brutal.core.bot import Bot
 
-        if not isinstance(source_bot, Bot) or not isinstance(source_event, Event):
+        if not isinstance(source_bot, Bot):
             raise TypeError
+
+        # if not isinstance(source_event, Event):
+        #     raise TypeError
 
         self.source_bot = source_bot
         self.source_event = source_event
         self.destination_bots = destination_bots or [self.source_bot, ]
-        self.destination_connections = destination_connections or [self.source_event.source_connection_id]
-        self.time_stamp = time.time()
+        self.destination_connections = destination_connections
+        if self.destination_connections is None:
+            if self.source_event is None:
+                log.err('not sure what to do with this action')
+                raise AttributeError
+                #self.source_event.source_connection_id
+            else:
+                self.destination_connections = [self.source_event.source_connection_id, ]
 
+        self.time_stamp = time.time()
         self.action_version = DEFAULT_ACTION_VERSION
 
         self.destination_room = room
