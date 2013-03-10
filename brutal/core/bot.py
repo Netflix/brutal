@@ -9,7 +9,8 @@ from brutal.protocols.core import ProtocolBackend
 from brutal.core.plugin import BotPlugin
 from brutal.core.models import Event, Action
 # supported protocols - done for plugin access. kinda ugly
-from brutal.protocols.irc import IrcBotProtocol
+from brutal.protocols.irc import IrcBackend
+from brutal.protocols.xmpp import XmppBackend
 
 from brutal.core.constants import *
 
@@ -290,13 +291,22 @@ class Bot(object):
     # ugh i need to fix this. I'm not sure i even understand why this works.
     @defer.inlineCallbacks
     def run_event_processor(self, name, func, event):
-        if getattr(func, '__brutal_threaded', False):
-            log.msg('executing event_parser {0!r} in thread'.format(name), logLevel=logging.DEBUG)
-            response = yield threads.deferToThread(func, event)
-        else:
-            log.msg('executing event_parser {0!r}'.format(name), logLevel=logging.DEBUG)
-            #try:
-            response = yield func(event)
+        run = True
+        response = None
+        # TODO: make this check if from_bot == _this_ bot
+        if event.from_bot is True:
+            if getattr(func, '__brutal_parse_self', False) is not True:
+                log.msg('ignoring event from self: {0!r}'.format(self))
+                run = False
+
+        if run is True:
+            if getattr(func, '__brutal_threaded', False):
+                log.msg('executing event_parser {0!r} in thread'.format(name), logLevel=logging.DEBUG)
+                response = yield threads.deferToThread(func, event)
+            else:
+                log.msg('executing event_parser {0!r}'.format(name), logLevel=logging.DEBUG)
+                #try:
+                response = yield func(event)
 
         yield self.process_result(response, event)
 
@@ -324,6 +334,7 @@ class Bot(object):
 
         # check cmds
         if event.cmd is not None and event.cmd in self.commands:
+
             cmd_func = self.commands[event.cmd]
             if getattr(cmd_func, '__brutal_threaded', False):
                 log.msg('executing cmd {0!r} on event {1!r} in thread'.format(event.cmd, event), logLevel=logging.DEBUG)
