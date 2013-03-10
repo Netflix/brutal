@@ -1,43 +1,42 @@
 import logging
-from twisted.internet import reactor, protocol, defer
+from twisted.internet import reactor, protocol
 from twisted.python import log
 from twisted.words.protocols import irc
-from brutal.core.models import Event
 
 from brutal.protocols.core import ProtocolBackend
 #from brutal.protocols.core import catch_error
 
 IRC_DEFAULT_PORT = 6667
 
-
-def irc_event_parser(raw_event):
-    if 'meta' in raw_event:
-        if 'user' in raw_event['meta']:
-            try:
-                username = raw_event['meta']['user'].split('!', 1)[0]
-            except KeyError:
-                pass
-            else:
-                raw_event['meta']['username'] = username
-
-    raw_event['event_version'] = event_version or None
-
-    # server info - protocol_name probably useles...
-    #server_info = {'protocol': self.__class__.__name__, 'hostname': self.hostname}
-    #hostname gets changed on connection RPL_WELCOMEMSG
-    try:
-        server_info['addr'] = transport.addr[0]
-    except Exception:
-        server_info['addr'] = None
-    try:
-        server_info['port'] = transport.addr[1]
-    except Exception:
-        server_info['port'] = None
-
-    raw_event['server_info'] = server_info
-
-    #this needs to return a defered... should use maybedeferred?
-    d = self.factory.new_event(raw_event)
+# OLD
+# def irc_event_parser(raw_event):
+#     if 'meta' in raw_event:
+#         if 'user' in raw_event['meta']:
+#             try:
+#                 username = raw_event['meta']['user'].split('!', 1)[0]
+#             except KeyError:
+#                 pass
+#             else:
+#                 raw_event['meta']['username'] = username
+#
+#     raw_event['event_version'] = event_version or None
+#
+#     # server info - protocol_name probably useles...
+#     #server_info = {'protocol': self.__class__.__name__, 'hostname': self.hostname}
+#     #hostname gets changed on connection RPL_WELCOMEMSG
+#     try:
+#         server_info['addr'] = transport.addr[0]
+#     except Exception:
+#         server_info['addr'] = None
+#     try:
+#         server_info['port'] = transport.addr[1]
+#     except Exception:
+#         server_info['port'] = None
+#
+#     raw_event['server_info'] = server_info
+#
+#     #this needs to return a defered... should use maybedeferred?
+#     d = self.factory.new_event(raw_event)
 
 
 class IrcBotProtocol(irc.IRCClient):
@@ -50,9 +49,9 @@ class IrcBotProtocol(irc.IRCClient):
         self.state_handler = None
         self.timer = None
         self.channel_users = {}
-        self.hostname = 'trolololol' # <- nothing
-        self.realname = 'brutal_bot' # <- ircname
-        self.username = 'brutal' # <- ~____@...
+        self.hostname = 'trolololol'  # <- nothing
+        self.realname = 'brutal_bot'  # <- ircname
+        self.username = 'brutal'  # <- ~____@...
 
     @property
     def nickname(self):
@@ -177,7 +176,8 @@ class IrcBotProtocol(irc.IRCClient):
         log.msg('action - user: {0!r}, channel: {1!r}, data: {2!r}'.format(user, channel, data), logLevel=logging.DEBUG)
 
     def topicUpdated(self, user, channel, newTopic):
-        log.msg('topicUpdated - user: {0!r}, channel: {1!r}, topic: {2!r}'.format(user, channel, newTopic), logLevel=logging.DEBUG)
+        log.msg('topicUpdated - user: {0!r}, channel: {1!r}, topic: {2!r}'.format(user, channel, newTopic),
+                logLevel=logging.DEBUG)
 
     def userRenamed(self, oldname, newname):
         log.msg('userRenamed - old: {0!r}, new: {1!r}'.format(oldname, newname), logLevel=logging.DEBUG)
@@ -309,6 +309,7 @@ class IrcBotProtocol(irc.IRCClient):
                 msg = None
             self.leave(action.channel, msg)
 
+
 class SimpleIrcBotProtocol(irc.IRCClient):
     """
     Handles basic bot activity on irc. generates events and fires
@@ -382,6 +383,13 @@ class SimpleIrcBotProtocol(irc.IRCClient):
             else:
                 self.join(channel)
 
+    def irc_unknown(self, prefix, command, params):
+        """
+        useful for debug'n weird irc data
+        """
+        log.msg('irc_unknown - prefix: {0!r}, cmd: {1!r}, params: {2!r}'.format(prefix, command, params),
+                logLevel=logging.DEBUG)
+
     #-- BOT SPECIFIC
     def _bot_process_event(self, raw_event):
         """
@@ -391,7 +399,15 @@ class SimpleIrcBotProtocol(irc.IRCClient):
 
     def _bot_process_action(self, action):
         log.msg('irc acting on {0!r}'.format(action), logLevel=logging.DEBUG)
-        pass
+        if action.action_type == 'message':
+            body = action.meta.get('body')
+            if body:
+                dest = action.destination_room
+                if dest:
+                    if dest[0] == '#':
+                        self.say(dest, body)
+                    else:
+                        self.msg(dest, body)
 
 
 class IrcBotClient(protocol.ReconnectingClientFactory):
@@ -466,7 +482,8 @@ class IrcBackend(ProtocolBackend):
         """
         # if use_ssl:
         #     reactor.connectSSL
-        log.msg('connecting to {0}:{1} with nick {2!r}'.format(self.server, self.port, self.nick), logLevel=logging.DEBUG)
+        log.msg('connecting to {0}:{1} with nick {2!r}'.format(self.server, self.port, self.nick),
+                logLevel=logging.DEBUG)
         reactor.connectTCP(self.server, self.port, self.client)
 
     def handle_action(self, action):
