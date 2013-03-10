@@ -1,0 +1,1 @@
+from brutal.core.plugin import BotPlugin, cmd

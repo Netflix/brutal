@@ -34,6 +34,7 @@ class Event(object):
         self.scope = None
         self.event_type = None
         self.meta = None
+        self.from_bot = None
 
         # TODO: move so that the bot actually calls this and passes in its list of accepted tokens
         self.parse_details()
@@ -60,11 +61,15 @@ class Event(object):
         self.scope = self.raw_details.get('scope')
         self.type = self.raw_details.get('type')
         self.meta = self.raw_details.get('meta')
+        self.from_bot = self.raw_details.get('from_bot')
+        if self.from_bot is not True:
+            self.from_bot = False
 
         if self.type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
             res = self.parse_event_cmd(self.meta['body'])
             if res is not None:
                 self.cmd, self.args = res
+
 
     def check_message_match(self, starts_with=None, regex=None):
         """
@@ -148,6 +153,9 @@ class Action(object):
             if source_event.source_room is not None:
                 self.destination_room = source_event.source_room
         self.scope = None
+        if self.source_event is not None:
+            self.scope = self.source_event.scope
+
         self.action_type = action_type
         self.meta = meta or {}
 
