@@ -2,7 +2,7 @@ import uuid
 from twisted.internet.defer import DeferredQueue
 from twisted.python import log
 from brutal.core.utils import PluginRoot
-from brutal.core.models import Event
+from brutal.core.models import Event, Action
 
 
 def catch_error(failure):
@@ -47,6 +47,12 @@ class ProtocolBackend(object):
             self.bot.new_event(event)
         else:
             log.err('invalid Event passed to {0}')
+
+    def queue_action(self, action):
+        if isinstance(action, Action):
+            self.action_queue.put(action)
+        else:
+            log.err('invalid object handed to protocol action queue: {0!r}'.format(action))
 
     def consume_actions(self, queue):
         """
