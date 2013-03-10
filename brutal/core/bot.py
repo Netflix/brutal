@@ -8,6 +8,7 @@ from twisted.python import log
 from brutal.protocols.core import ProtocolBackend
 from brutal.core.plugin import BotPlugin
 from brutal.core.models import Event, Action
+# supported protocols - done for plugin access. kinda ugly
 from brutal.protocols.irc import IrcBotProtocol
 
 from brutal.core.constants import *
@@ -21,14 +22,18 @@ class Bot(object):
         self.id = str(uuid.uuid1())
         log.msg('starting bot with nick: {0!r}'.format(nick), logLevel=logging.DEBUG)
         self.nick = nick
+        #TODO: change this to a dict so i can call by id key
         self.connections = []
 
         #bot manager instance
         self.manager = None
 
-        # setup this bots event queue / consumer
+        # setup this bots event queue / consumer, action queue/consumer
         self.event_queue = defer.DeferredQueue()
         self._consume_events(self.event_queue)
+
+        self.action_queue = defer.DeferredQueue()
+        self._consume_actions(self.action_queue)
 
         # build connections
         self._parse_connections(connections)
@@ -144,9 +149,9 @@ class Bot(object):
                     event = None
 
             if event is not None:
-                log.msg('EVENT on {0!r}: {1!r}'.format(self, event), logLevel=logging.DEBUG)
+#                log.msg('EVENT on {0!r}: {1!r}'.format(self, event), logLevel=logging.DEBUG)
                 res = defer.maybeDeferred(self.process_event, event)
-                # res.addCallback(process_result)
+                #res.addCallback(self.process_result, event)
 
             queue.get().addCallback(consumer)
         queue.get().addCallback(consumer)
@@ -156,6 +161,45 @@ class Bot(object):
         this is what protocol backends call when they get an event.
         """
         self.event_queue.put(event)
+
+    def build_event(self, event_data):
+        #todo: needs to be safe
+        try:
+            e = Event(source_bot=self, raw_details=event_data)
+        except Exception as e:
+            log.err('failed to build event from {0!r}: {1!r}'.format(event_data, e))
+        else:
+            return e
+
+    # ACTION QUEUE
+    # default action consumer
+    def _consume_actions(self, queue):
+        def consumer(action):
+            # check if Action, else try to make it one
+            if not isinstance(action, Action):
+                try:
+                    action = self.build_action(action)
+                except Exception as e:
+                    log.err('unable to build Action with {0!r}: {1!r}'.format(action, e))
+
+            if action is not None:
+                res = defer.maybeDeferred(self.process_action, action)
+
+            queue.get().addCallback(consumer)
+        queue.get().addCallback(consumer)
+
+    def new_action(self):
+        a = Action(source_bot=self)
+        return a
+
+    def build_action(self, action_data, event=None):
+        if type(action_data) in (str, unicode):
+            try:
+                a = Action(source_bot=self, source_event=event).msg(action_data)
+            except Exception as e:
+                log.err('failed to build action from {0!r}, for {1!r}: {2!r}'.format(action_data, event, e))
+            else:
+                return a
 
     # PLUGIN SYSTEM #################################################
 
@@ -241,48 +285,45 @@ class Bot(object):
                         logLevel=logging.DEBUG)
                 self.event_parsers[parser] = func
 
-    # OLD
+    # PLUGIN RUNNERS
 
-    def new_action(self):
-        a = Action(destination_bot=self)
-        return a
-
-    def build_event(self, event_data):
-        #todo: needs to be safe
-        try:
-            e = Event(source_bot=self, raw_details=event_data)
-        except Exception as e:
-            log.err('failed to build event from {0!r}: {1!r}'.format(event_data, e))
+    # ugh i need to fix this. I'm not sure i even understand why this works.
+    @defer.inlineCallbacks
+    def run_event_processor(self, name, func, event):
+        if getattr(func, '__brutal_threaded', False):
+            log.msg('executing event_parser {0!r} in thread'.format(name), logLevel=logging.DEBUG)
+            response = yield threads.deferToThread(func, event)
         else:
-            return e
+            log.msg('executing event_parser {0!r}'.format(name), logLevel=logging.DEBUG)
+            #try:
+            response = yield func(event)
+
+        yield self.process_result(response, event)
 
     # DAT NEW HOT FIRE CMD EXECUTION
     @defer.inlineCallbacks
     def process_event(self, event):
         #TODO: this needs some love
+
+        # this will keep track of all the responses we get
+        # responses = []
+
         # wrap everything in try/except
         if not isinstance(event, Event):
             log.err('invalid event, ignoring: {0!r}'.format(event))
             raise
 
-        #run through event parsers
+        # run through event parsers
         for name, event_parser in self.event_parsers.items():
-            if getattr(event_parser, '__brutal_threaded', False):
-                log.msg('executing event_parser {0!r} in thread'.format(name), logLevel=logging.DEBUG)
-                response = yield threads.deferToThread(event_parser, event)
-            else:
-                log.msg('executing event_parser {0!r}'.format(name), logLevel=logging.DEBUG)
-                #try:
-                response = yield event_parser(event)
-                #except
+            # moved this logic out.
+            self.run_event_processor(name, event_parser, event)
 
-            if type(response) in (str, unicode):
-                a = self.new_action().msg(event.channel, response)
-                ## event.add_response_action(a)
+            # if type(response) in (str, unicode):
+            #     a = self.new_action().msg(event.channel, response)
+            #     ## event.add_response_action(a)
 
-        #check cmds
+        # check cmds
         if event.cmd is not None and event.cmd in self.commands:
-            # IM HERE. i need to make sure event.cmd is filled in, and a bunch of other shit. test this out first.
             cmd_func = self.commands[event.cmd]
             if getattr(cmd_func, '__brutal_threaded', False):
                 log.msg('executing cmd {0!r} on event {1!r} in thread'.format(event.cmd, event), logLevel=logging.DEBUG)
@@ -291,13 +332,31 @@ class Bot(object):
                 log.msg('executing cmd {0!r} on event {1!r}'.format(event.cmd, event), logLevel=logging.DEBUG)
                 response = yield cmd_func(event)
 
-            log.msg('RESPONSE: {0!r}'.format(response), logLevel=logging.DEBUG)
+            # process response
+            actions = yield self.process_result(response, event)
+
             # if type(response) in (str, unicode):
             #     a = self.new_action().msg(event.channel, response)
                 ## event.add_response_action(a)
 
-        # do we actually want to return the event?
+        # do we actually want to return the event? or the response?
         defer.returnValue(event)
+
+    def process_result(self, response, event):
+        if response is not None:
+            log.msg('RESPONSE: {0!r}'.format(response), logLevel=logging.DEBUG)
+            if isinstance(response, Action):
+                self.action_queue.put(response)
+            else:
+                a = self.build_action(response, event)
+
+                if a:
+                    self.action_queue.put(a)
+
+    def process_action(self, action):
+        for conn in self.connections:
+            if conn.id is not None and conn.id in action.destination_connections:
+                conn.queue_action(action)
 
 
 class BotManager(object):
