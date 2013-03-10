@@ -46,12 +46,14 @@ def parser(func=None, thread=True):
 
 
 # make event_type required?
-def event(func=None, event_type=None, thread=True):
+def event(func=None, event_type=None, thread=False):
     """
     this decorator is used to register an event parser that the bot will respond to.
     """
     def decorator(func):
         func.__brutal_event = True
+        if thread is True:
+            func.__brutal_threaded = True
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
