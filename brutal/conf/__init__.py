@@ -4,6 +4,7 @@ from brutal.conf import global_config
 
 ENV_VAR = 'BRUTAL_CONFIG_MODULE'
 
+
 # big ups to django for the config design
 class LazyConfig(object):
     def __init__(self):
@@ -26,7 +27,7 @@ class LazyConfig(object):
 
     def configure(self, default_config=global_config, **options):
         if self._config is not None:
-            raise RuntimeError, 'config already setup'
+            raise RuntimeError('config already setup')
         user_config = UserConfig(default_config)
         for key, value in options.items():
             setattr(user_config, key, value)
@@ -38,9 +39,10 @@ class LazyConfig(object):
             if not config_module:
                 raise KeyError
         except KeyError:
-            raise ImportError, 'no config defined.'
+            raise ImportError('no config defined.')
 
         self._config = BrutalConfig(config_module)
+
 
 class BrutalConfig(object):
     def __init__(self, config_module):
@@ -53,8 +55,8 @@ class BrutalConfig(object):
 
         try:
             config = importlib.import_module(self.CONFIG_MODULE)
-        except ImportError, e:
-            raise ImportError, '{0} module cannot be found in sys.path'.format(self.CONFIG_MODULE)
+        except ImportError:
+            raise ImportError('{0} module cannot be found in sys.path'.format(self.CONFIG_MODULE))
 
         for setting in dir(config):
             if setting == setting.upper():
@@ -65,13 +67,14 @@ class BrutalConfig(object):
         for plugin in INSTALLED_PLUGINS:
             try:
                 module = importlib.import_module(plugin)
-            except ImportError, e:
-                raise ImportError,'"{0} module cannot be found in sys.path'.format(plugin)
+            except ImportError:
+                raise ImportError('{0} module cannot be found in sys.path'.format(plugin))
             else:
                 self.PLUGINS.append(module)
 
     def get_all_members(self):
         return dir(self)
+
 
 class UserConfig(object):
     CONFIG = None
