@@ -1,8 +1,6 @@
-# TODO: rename this module.
-import logging
 import uuid
+import logging
 from twisted.internet.defer import DeferredQueue
-from twisted.python import log
 
 from brutal.core.utils import PluginRoot
 from brutal.core.models import Event, Action
@@ -27,15 +25,25 @@ class ProtocolBackend(object):
 
         self.id = str(uuid.uuid1())
         self.bot = bot
+        self.rooms = None
+
         self.action_queue = DeferredQueue()
         self.consume_actions(self.action_queue)
-        self.log = logging.getLogger('brutal.protocols.{0}'.format(self.__class__.__name__))
+
+        self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
 
     def __repr__(self):
         return '<{0} {1!s}>'.format(self.__class__.__name__, self.id)
 
     def __str__(self):
         return repr(self)
+
+    @property
+    def default_room(self):
+        if self.rooms is not None:
+            for i in self.rooms:
+                return i
+        self.log.error('unable to get default room from {0!r} on {1!r}'.format(self.rooms, self))
 
     def handle_event(self, event):
         """

@@ -3,14 +3,10 @@ import logging
 
 from twisted.internet import reactor
 from twisted.internet import task, defer
+from brutal.core.connections import ConnectionManager
 
-from brutal.protocols.core import ProtocolBackend
 from brutal.core.plugin import PluginManager
 from brutal.core.models import Event, Action
-# supported protocols - done for plugin access. kinda ugly
-from brutal.protocols.irc import IrcBackend
-from brutal.protocols.xmpp import XmppBackend
-from brutal.protocols.testconsole import TestConsoleBackend
 
 from brutal.core.constants import *
 
@@ -30,10 +26,6 @@ class Bot(object):
                                                           self.nick))
         self.log.info('starting bot')
 
-        # list of all connections
-        # TODO: create connection manager
-        self.active_connections = {}
-
         #bot manager instance
         self.bot_manager = None
 
@@ -50,8 +42,9 @@ class Bot(object):
         # self.manager.config.PLUGINS:
 
         # build connections
-        self._parse_connections(connections)
-        self.log.debug('connections on {0!r}: {1!r}'.format(self.nick, self.active_connections))
+        # TODO: create connection manager
+        self.connection_manager = ConnectionManager(config=connections, bot=self)
+        self.log.debug('connections on {0!r}: {1!r}'.format(self.nick, self.connection_manager))
 
         # should have a 'ready' state that we should check before starting?
         self.state = OFF
@@ -69,8 +62,7 @@ class Bot(object):
         #TODO: catch failures?
         #TODO: pass enabled plugins
         self.plugin_manager.start(self.enabled_plugins)
-
-        self.connect()
+        self.connection_manager.connect()
         self.state = ON
 
     # review
@@ -93,60 +85,6 @@ class Bot(object):
         if no destination room is defined, and no event triggered an action, determine where to send results
 
         NOTE: for now send everywhere...
-        """
-        pass
-
-    # CONNECTIONS
-
-    def _parse_connections(self, config_connections):
-        if isinstance(config_connections, list):
-            for conn_settings in config_connections:
-                conn = self._build_connection(conn_settings)
-
-                if conn is not None:
-                    self.active_connections[conn.id] = conn
-                else:
-                    self.log.error('connection creation failed')
-        else:
-            self.log.error('invalid connection configuration, needs to be a list')
-
-    def _build_connection(self, conn_settings):
-        if not isinstance(conn_settings, dict):
-            self.log.error('invalid conn_settings passed to build_connection: {0!r}'.format(conn_settings))
-            return
-
-        if 'nick' not in conn_settings:
-            conn_settings['nick'] = self.nick
-
-        protocol_name = conn_settings.get('protocol')
-        if protocol_name is None:
-            self.log.error('no protocol defined for connection: {0!r}'.format(conn_settings))
-            return
-        protocol_name = protocol_name.strip().lower()
-
-        for protocol in ProtocolBackend.plugins:
-            if protocol.protocol_name.lower() == protocol_name:
-                #TODO: should probably try/except this
-                try:
-                    conn = protocol(bot=self)
-                    conn.configure(**conn_settings)
-                except Exception as e:
-                    self.log.exception('failed to build protocol: {0!r}'.format(e))
-                else:
-                    return conn
-
-        self.log.error('unsupported protocol given: {0!r}'.format(protocol_name))
-
-    def connect(self):
-        """
-        connect the actual connections to the reactor
-        """
-        for conn_id, conn in self.active_connections.items():
-            conn.connect()
-
-    def disconnect(self):
-        """
-        placeholder
         """
         pass
 
