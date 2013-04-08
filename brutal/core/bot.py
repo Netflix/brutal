@@ -166,10 +166,16 @@ class Bot(object):
     # PLUGIN SYSTEM #################################################
     def route_response(self, response, event):
         self.log.debug('got {0!r} from {1!r}'.format(response, event))
+        #TODO: update to actually route to correct bot, for now we just assume its ours
+        if isinstance(response, Action):
+            self.action_queue.put(response)
+        else:
+            self.log.error('got invalid response type')
 
     def process_action(self, action):
         self.log.debug('WAT! Routing response! {0}'.format(action))
-        # for conn_id, conn in self.active_connections.items():
+        self.connection_manager.route_action(action)
+        # for client_id, client in self.connection_manager..items():
         #     if conn.id is not None and conn.id in action.destination_connections:
         #         conn.queue_action(action)
 
