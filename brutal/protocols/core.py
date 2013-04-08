@@ -71,7 +71,11 @@ class ProtocolBackend(object):
         responsible for reading actions given to this connection
         """
         def consumer(action):
-            self.handle_action(action)
+            if isinstance(action, Action):
+                self.handle_action(action)
+            else:
+                self.log.warning('invalid action put in queue: {0!r}'.format(action))
+
             queue.get().addCallback(consumer)
         queue.get().addCallback(consumer)
 
