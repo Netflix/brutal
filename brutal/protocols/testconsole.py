@@ -56,6 +56,7 @@ class TestConsoleBackend(ProtocolBackend):
         self.log_traffic = kwargs.get('log_traffic', True)
 
         self.nick = kwargs.get('nick')
+        self.rooms = ['ROOM', ]
 
         self.client = TestConsoleClient(backend=self)
 
