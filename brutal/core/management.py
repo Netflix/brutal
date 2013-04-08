@@ -1,10 +1,12 @@
 from importlib import import_module
+import logging
 import os
 import re
 import shutil
 import argparse
 
 import brutal
+
 
 def _make_writeable(filename):
     # thx django
@@ -13,6 +15,7 @@ def _make_writeable(filename):
         st = os.stat(filename)
         new_permissions = stat.S_IMODE(st.st_mode) | stat.S_IWUSR
         os.chmod(filename, new_permissions)
+
 
 def spawn_command(spawn_name):
     cwd = os.getcwd()
@@ -34,13 +37,14 @@ def spawn_command(spawn_name):
     try:
         #print 'MKDIR {0}'.format(base_dir)
         os.mkdir(base_dir)
-    except OSError, e:
+    except OSError as e:
+        # log dat e?
         raise
 
     template_dir = os.path.join(brutal.__path__[0], 'spawn', 'spawn_template')
 
     for base, sub, files in os.walk(template_dir):
-        relative = base[len(template_dir)+1:].replace('spawn_name', spawn_name)
+        relative = base[len(template_dir) + 1:].replace('spawn_name', spawn_name)
         if relative:
             #print 'MKDIR {0}'.format(os.path.join(base_dir, relative))
             os.mkdir(os.path.join(base_dir, relative))
@@ -64,11 +68,14 @@ def spawn_command(spawn_name):
             except OSError:
                 raise
 
-#TODO: get rid of config_name
+
+#TODO: get rid of config_name, rename func to start_bots
 def run_command(config_name):
     import brutal.run
     from brutal.conf import config
+
     brutal.run.main(config)
+
 
 # django general design pattern mimicked
 class Overlord(object):
@@ -78,7 +85,7 @@ class Overlord(object):
     def build_parser(self):
         # global options
         config = argparse.ArgumentParser(add_help=False)
-        config.add_argument('-c','--config', help='specify the config module you would like to use')
+        config.add_argument('-c', '--config', help='specify the config module you would like to use')
 
         # primary parser
         parser = argparse.ArgumentParser(description='Go forth. Go forth, and DIE!', parents=[config])
@@ -89,7 +96,7 @@ class Overlord(object):
         spawn_cmd.add_argument('name', action='store', help='new bot spawn name')
 
         # run
-        run_cmd = subparsers.add_parser('run', help='run the bot in the cwd')
+        subparsers.add_parser('run', help='run the bot in the cwd')
 
         return parser
 
@@ -110,6 +117,7 @@ class Overlord(object):
             print 'spawning {0}'.format(project_name)
 
             spawn_command(project_name)
+
 
 def exec_overlord(config_name=None):
     overlord = Overlord()
