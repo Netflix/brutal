@@ -1,6 +1,5 @@
 import functools
 
-
 #TODO: not using this anymore.
 def decorator(plz_decorate):
     """
