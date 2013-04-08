@@ -73,7 +73,7 @@ class Event(object):
         source_bot: the source bot the event was generated from
 
         details:
-            conn: if given, the source connection the event was generated from
+            client: if given, the source client the event was generated from
             type
             meta
             version
@@ -89,7 +89,8 @@ class Event(object):
         self.cmd = None
         self.args = None
 
-        self.source_connection_id = None
+        self.source_client = None
+        self.source_client_id = None
         self.source_room = None
         self.scope = None
 
@@ -116,8 +117,10 @@ class Event(object):
         if not isinstance(self.raw_details, dict):
             raise TypeError
 
-        self.source_connection_id = self.raw_details.get('connection_id')
+        self.source_client = self.raw_details.get('client')
+        self.source_client_id = self.raw_details.get('client_id')
         self.source_room = self.raw_details.get('channel') or self.raw_details.get('room')
+
         self.scope = self.raw_details.get('scope')
         self.type = self.raw_details.get('type')
         self.meta = self.raw_details.get('meta')
@@ -170,6 +173,7 @@ class Event(object):
                     return True
         return False
 
+
 class Action(object):
     """
     used to define bot actions, mostly responses to incoming events
@@ -180,7 +184,7 @@ class Action(object):
         join
         part
     """
-    def __init__(self, source_bot, source_event=None, destination_bots=None, destination_connections=None, room=None,
+    def __init__(self, source_bot, source_event=None, destination_bots=None, destination_client_ids=None, rooms=None,
                  action_type=None, meta=None):
         self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
 
@@ -189,23 +193,23 @@ class Action(object):
 
         self.source_bot = source_bot
         self.source_event = source_event
+
         self.destination_bots = destination_bots or [self.source_bot, ]
-        self.destination_connections = destination_connections
-        if self.destination_connections is None:
+        self.destination_client_ids = destination_client_ids
+        self.destination_rooms = rooms
+        if self.destination_client_ids is None:
             if self.source_event is None:
                 self.log.error('not sure what to do with this action')
                 raise AttributeError
                 #self.source_event.source_connection_id
             else:
-                self.destination_connections = [self.source_event.source_connection_id, ]
+                self.destination_client_ids = [self.source_event.source_client_id, ]
+        if self.destination_rooms is None:
+            self.destination_rooms = [source_event.source_room, ]
 
         self.time_stamp = time.time()
         self.action_version = DEFAULT_ACTION_VERSION
 
-        self.destination_room = room
-        if self.destination_room is None:
-            if source_event.source_room is not None:
-                self.destination_room = source_event.source_room
         self.scope = None
         if self.source_event is not None:
             self.scope = self.source_event.scope
