@@ -1,6 +1,9 @@
+# TODO: rename this module.
+import logging
 import uuid
 from twisted.internet.defer import DeferredQueue
 from twisted.python import log
+
 from brutal.core.utils import PluginRoot
 from brutal.core.models import Event, Action
 
@@ -26,6 +29,7 @@ class ProtocolBackend(object):
         self.bot = bot
         self.action_queue = DeferredQueue()
         self.consume_actions(self.action_queue)
+        self.log = logging.getLogger('brutal.protocols.{0}'.format(self.__class__.__name__))
 
     def __repr__(self):
         return '<{0} {1!s}>'.format(self.__class__.__name__, self.id)
@@ -46,13 +50,13 @@ class ProtocolBackend(object):
             event['connection_id'] = self.id
             self.bot.new_event(event)
         else:
-            log.err('invalid Event passed to {0}')
+            self.log.error('invalid Event passed to {0}')
 
     def queue_action(self, action):
         if isinstance(action, Action):
             self.action_queue.put(action)
         else:
-            log.err('invalid object handed to protocol action queue: {0!r}'.format(action))
+            self.log.error('invalid object handed to protocol action queue: {0!r}'.format(action))
 
     def consume_actions(self, queue):
         """
