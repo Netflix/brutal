@@ -1,5 +1,6 @@
 import logging
 from collections import OrderedDict
+from brutal.core.models import Action
 
 from brutal.protocols.core import ProtocolBackend
 # supported protocols - done for plugin access. kinda ugly
@@ -83,8 +84,22 @@ class ConnectionManager(object):
         """
         pass
 
+    def route_action(self, action):
+        if isinstance(action, Action):
+            self.log.debug('destination_bots: {0!r}'.format(action.destination_bots))
+            self.log.debug('destination_client_ids: {0!r}'.format(action.destination_client_ids))
+            self.log.debug('destination_rooms: {0!r}'.format(action.destination_rooms))
+
+            if self.bot in action.destination_bots:
+                for client_id in action.destination_client_ids:
+                    if client_id in self.clients:
+                        self.log.debug('queuing action {0!r} on client {1!r}'.format(action, self.clients[client_id]))
+                        self.clients[client_id].queue_action(action)
+
+
     @property
     def default_destination(self):
         for client in self.clients:
             return client.default_room
         self.log.error('unable to get default client on {0!r}'.format(self))
+
