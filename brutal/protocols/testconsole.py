@@ -23,8 +23,8 @@ class TestConsoleClient(basic.LineReceiver):
     def connectionMade(self):
         self.log.debug('connected!')
         self.sendLine('>>> brutal bot test console connected')
-        loop = task.LoopingCall(self.print_loop)
-        loop.start(2.0)
+        #loop = task.LoopingCall(self.print_loop)
+        #loop.start(2.0)
 
     def lineReceived(self, line):
         # ignore blank lines
@@ -33,8 +33,12 @@ class TestConsoleClient(basic.LineReceiver):
 
         self.log.debug('line received: {0!r}'.format(line))
         msg = line
-        event_data = {'type': 'message', 'scope': 'public', 'channel': 'test_console', 'meta': {'from': 'console',
-                                                                                                'body': msg}}
+        if self.backend.rooms is not None:
+            room = self.backend.rooms[0]
+        else:
+            room = 'test_console'
+
+        event_data = {'type': 'message', 'scope': 'public', 'room': room, 'meta': {'from': 'console', 'body': msg}}
         #self.sendLine('GOT! {0!r}'.format(line))
         self._bot_process_event(event_data)
 
@@ -43,6 +47,11 @@ class TestConsoleClient(basic.LineReceiver):
 
     def bot_process_action(self, action):
         self.sendLine('>>> got action! {0!r}'.format(action))
+        if action.action_type == 'message':
+            body = action.meta.get('body')
+            if body:
+                for dest in action.destination_rooms:
+                    self.sendLine('>>> {0}: {1}'.format(dest, body))
 
     def print_loop(self):
         self.sendLine('>>> loop')
