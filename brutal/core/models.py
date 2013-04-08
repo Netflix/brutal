@@ -3,6 +3,7 @@ import logging
 
 from brutal.core.constants import DEFAULT_EVENT_VERSION, DEFAULT_ACTION_VERSION
 
+
 # class NetworkConfig(object):
 #     __metaclass__ = PluginRoot
 #     protocol_name = None
@@ -182,11 +183,6 @@ class Action(object):
     def __init__(self, source_bot, source_event=None, destination_bots=None, destination_connections=None, room=None,
                  action_type=None, meta=None):
         self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
-        #TODO: fix this awful import issue
-        from brutal.core.bot import Bot
-
-        if not isinstance(source_bot, Bot):
-            raise TypeError
 
         # if not isinstance(source_event, Event):
         #     raise TypeError
