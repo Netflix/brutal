@@ -102,22 +102,12 @@ class Bot(object):
 
             if event is not None:
                 self.log.debug('EVENT on {0!r} {1!r}'.format(self, event))
-                #res = defer.maybeDeferred(self.plugin_manager.process_event, event)
                 responses = self.plugin_manager.process_event(event)
-                # this is going to be a list of deferreds
+                # this is going to be a list of deferreds,
+                # TODO: should probably do this differently
                 for response in responses:
-                    self.log.debug('adding response router')
+                    #self.log.debug('adding response router')
                     response.addCallback(self.route_response, event)
-                #self.log.debug('RESULT: {0!r}'.format(res))
-                #for i in res:
-                    #self.process_result(i, event)
-                    # a = self.build_action(i, event=event)
-                    # if a is not None:
-                    #     self.log.debug('queuing action: {0}'.format(a))
-                    #     self.action_queue.put(a)
-                    # else:
-                    #     self.log.debug('failed to build action')
-                #res.addCallback(self.process_result, event)
 
             queue.get().addCallback(consumer)
         queue.get().addCallback(consumer)
@@ -173,7 +163,7 @@ class Bot(object):
             self.log.error('got invalid response type')
 
     def process_action(self, action):
-        self.log.debug('WAT! Routing response! {0}'.format(action))
+        #self.log.debug('routing response: {0}'.format(action))
         self.connection_manager.route_action(action)
         # for client_id, client in self.connection_manager..items():
         #     if conn.id is not None and conn.id in action.destination_connections:
