@@ -3,11 +3,12 @@ import logging
 import inspect
 import functools
 from twisted.internet import reactor, task, defer, threads
+from twisted.python.threadable import isInIOThread
 
 from brutal.core.models import Action, Event
 from brutal.conf import config
 
-#_log = logging.getLogger('brutal.core.plugin')
+SRE_MATCH_TYPE = type(re.match("", ""))
 
 
 def threaded(func=None):
@@ -37,7 +38,7 @@ def cmd(func=None, command=None, thread=False):
         func.__brutal_event_type = 'cmd'
         func.__brutal_trigger = None
         if command is not None and type(command) in (str, unicode):
-            logging.info('sup')
+
             try:
                 func.__brutal_trigger = re.compile(command)
             except Exception:
@@ -111,6 +112,42 @@ def event(func=None, event_type=None, thread=False):
         return decorator(func)
 
 
+def match(func=None, regex=None, thread=False):
+    """
+    this decorator is used to create a command the bot will respond to.
+    """
+    def decorator(func):
+        func.__brutal_event = True
+        func.__brutal_event_type = 'message'
+        func.__brutal_trigger = None
+        if regex is not None and type(regex) in (str, unicode):
+            try:
+                func.__brutal_trigger = re.compile(regex)
+            except Exception:
+                logging.exception('failed to build regex for {0!r} from func {1!r}'.format(regex, func.__name__))
+
+        if func.__brutal_trigger is None:
+            try:
+                raw_name = r'^{0}$'.format(func.__name__)
+                func.__brutal_trigger = re.compile(raw_name)
+            except Exception:
+                logging.exception('failing to build match from {0!r}'.format(func.__name__))
+                func.__brutal_event = False
+
+        if thread is True:
+            func.__brutal_threaded = True
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
 #TODO: possibly abstract like this?
 class Parser(object):
     def __init__(self, func, source=None):
@@ -123,14 +160,14 @@ class Parser(object):
             self.source_name = self.source.__name__
         else:
             try:
-                test = issubclass(source, BotPlugin)
+                test = isinstance(source, BotPlugin)
             except TypeError:
-                self.source_name = "UNKNOWN: {0!r}".format(source)
+                self.source_name = 'UNKNOWN: {0!r}'.format(source)
             else:
                 if test is True:
                     self.source_name = "{0}".format(self.__class__.__name__)
                 else:
-                    self.source_name = "UNKNOWN: {0!r}".format(source)
+                    self.source_name = 'UNKNOWN instance: {0!r}'.format(source)
 
         self.func = func
         self.func_name = self.func.__name__
@@ -147,12 +184,13 @@ class Parser(object):
         #self.parent = None
         #elf.children = None
 
+        #TODO: check if healthy
         self.event_type = getattr(self.func, '__brutal_event_type', None)
-        if self.event_type == 'cmd':
+        if self.event_type in ['cmd', 'message']:
             self.regex = getattr(self.func, '__brutal_trigger', None)
 
             if self.regex is None:
-                self.log.error('failed to get compiled gex from cmd for {0}'.format(self))
+                self.log.error('failed to get compiled regex from func for {0}'.format(self))
                 self.healthy = False
             else:
                 # should probably check that its a compiled re
@@ -173,22 +211,35 @@ class Parser(object):
     def matches(self, event):
         if not isinstance(event, Event):
             self.log.error('invalid event passed to parser')
-            return False
+            return
 
         if event.event_type == self.event_type:
             if event.event_type == 'cmd':
                 if event.cmd is not None and self.regex is not None:
                     try:
-                        if self.regex.match(event.cmd):
-                            return True
+                        match = self.regex.match(event.cmd)
                     except Exception:
-                        self.log.exception('invalid regex on event parser')
+                        self.log.exception('invalid regex match attempt on {0!r}, {1!r}'.format(event.cmd, self))
+                    else:
+                        return match
                 else:
                     self.log.error('invalid event passed in')
+            elif event.event_type == 'message' and isinstance(event.meta, dict) and 'body' in event.meta:
+                body = event.meta['body']
+                #TODO: HERE, make this smarter.
+                if self.regex is not None and type(body) in (str, unicode):
+                    try:
+                        match = self.regex.match(body)
+                    except Exception:
+                        self.log.exception('invalid regex match attempt on {0!r}, {1!r}'.format(body, self))
+                    else:
+                        return match
+                else:
+                    self.log.error('message contains no body to regex match against')
+            else:
+                return True
         else:
             self.log.debug('event_parser not meant for this event type')
-
-        return False
 
     @classmethod
     def build_parser(cls, func, source):
@@ -241,7 +292,13 @@ class PluginManager(object):
                         self.log.exception('failed to load plugin {0!r} from {1!r}'.format(class_name,
                                                                                            plugin_module.__name__))
                     else:
-                        self.plugin_instances[instance] = plugin_module.__name__
+                        try:
+                            instance.setup()
+                        except Exception:
+                            self.log.exception('failed to setup plugin {0!r} from {1!r}'.format(class_name,
+                                                                                                plugin_module.__name))
+                        else:
+                            self.plugin_instances[instance] = plugin_module.__name__
 
         self._register_plugins(self.plugin_modules, self.plugin_instances)
 
@@ -301,7 +358,7 @@ class PluginManager(object):
     # event processing
     # ugh i need to fix this. I'm not sure i even understand why this works.
     @defer.inlineCallbacks
-    def _run_event_processor(self, event_parser, event):
+    def _run_event_processor(self, event_parser, event, *args):
         run = True
         response = None
         # TODO: make this check if from_bot == _this_ bot
@@ -313,15 +370,15 @@ class PluginManager(object):
         if run is True:
             if event_parser.threaded is True:
                 self.log.debug('executing event_parser {0!r} in thread'.format(event_parser))
-                response = yield threads.deferToThread(event_parser.func, event)
+                response = yield threads.deferToThread(event_parser.func, event, *args)
             else:
                 self.log.debug('executing event_parser {0!r}'.format(event_parser))
                 #try:
-                response = yield event_parser.func(event)
+                response = yield event_parser.func(event, *args)
 
         defer.returnValue(response)
 
-    #TODO: this probalby doesn't need to be wrapped anymore.
+    #TODO: this probably doesn't need to be wrapped anymore.
     #@defer.inlineCallbacks
     def process_event(self, event):
         #TODO: this needs some love
@@ -341,13 +398,18 @@ class PluginManager(object):
             self.log.debug('detected event_type {0!r}'.format(event.event_type))
             for event_parser in self.event_parsers[event.event_type]:
                 # check if match
-                if event_parser.matches(event):
+                match = event_parser.matches(event)
+                response = None
+                if match is True:
                     self.log.debug('running event_parser {0!r}'.format(event_parser))
-                    #response = yield self._run_event_processor(event_parser, event)
                     response = self._run_event_processor(event_parser, event)
+                elif isinstance(match, SRE_MATCH_TYPE):
+                    self.log.debug('running event_parser {0!r} with regex results {1!r}'.format(event_parser,
+                                                                                                match.groups()))
+                    response = self._run_event_processor(event_parser, event, *match.groups())
 
-                    if response is not None:
-                        responses.append(response)
+                if response is not None:
+                    responses.append(response)
 
         # default 'all' parsers
         for event_parser in self.event_parsers[None]:
@@ -396,7 +458,6 @@ class BotPlugin(object):
 
     """
     event_version = '1'
-
     built_in = False  # is this a packaged plugin
 
     #TODO: make a 'task' decorator...
@@ -465,15 +526,18 @@ class BotPlugin(object):
 
     # Actions
 
-    def _queue_action(self, action):
+    def _queue_action(self, action, event=None):
         if isinstance(action, Action):
-            self.bot.action_queue.put(action)
+            if isInIOThread():
+                self.bot.route_response(action, event)
+            else:
+                reactor.callFromThread(self.bot.route_response, action, event)
         else:
             self.log.error('tried to queue invalid action: {0!r}'.format(action))
 
     def msg(self, msg, room=None, event=None):
         a = Action(source_bot=self.bot, source_event=event).msg(msg, room=room)
-        self._queue_action(a)
+        self._queue_action(a, event)
 
     # internal
 

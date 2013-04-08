@@ -82,6 +82,7 @@ class Event(object):
 
         self.source_bot = source_bot
         self.raw_details = raw_details
+        #self.raw_line =
         self.time_stamp = time.time()
 
         self.event_version = DEFAULT_EVENT_VERSION
@@ -108,7 +109,7 @@ class Event(object):
         # self.response = Queue()
 
     def __repr__(self):
-        return "<{0} {1}:{2}>".format(self.__class__.__name__, self.source_bot.nick, self.type)
+        return "<{0} {1}:{2}>".format(self.__class__.__name__, self.source_bot.nick, self.event_type)
 
     def __str__(self):
         return repr(self)
@@ -122,16 +123,16 @@ class Event(object):
         self.source_room = self.raw_details.get('channel') or self.raw_details.get('room')
 
         self.scope = self.raw_details.get('scope')
-        self.type = self.raw_details.get('type')
+        self.event_type = self.raw_details.get('type')
         self.meta = self.raw_details.get('meta')
         self.from_bot = self.raw_details.get('from_bot')
         if self.from_bot is not True:
             self.from_bot = False
 
-        if self.type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
+        if self.event_type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
             res = self.parse_event_cmd(self.meta['body'])
-            if res is False:
-                self.log.debug('event not parsed as a command')
+            # if res is False:
+            #     self.log.debug('event not parsed as a command')
 
     def check_message_match(self, starts_with=None, regex=None):
         """
