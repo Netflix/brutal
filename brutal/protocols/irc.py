@@ -470,11 +470,9 @@ class IrcBackend(ProtocolBackend):
         self.nick = kwargs.get('nick')
         self.password = kwargs.get('password')
 
-        self.channels = kwargs.get('channels', [])
+        self.rooms = kwargs.get('channels') or kwargs.get('rooms', [])
 
-        self.client = IrcBotClient(self.channels, nickname=self.nick, backend=self)
-
-        #perhaps self.bot shouldn't' go past here.
+        self.client = IrcBotClient(self.rooms, nickname=self.nick, backend=self)
 
     def connect(self, *args, **kwargs):
         """
