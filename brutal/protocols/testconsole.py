@@ -3,7 +3,6 @@ from os import linesep
 
 from twisted.internet import stdio
 from twisted.protocols import basic
-from twisted.internet import task
 
 from brutal.protocols.core import ProtocolBackend
 
@@ -23,6 +22,8 @@ class TestConsoleClient(basic.LineReceiver):
     def connectionMade(self):
         self.log.debug('connected!')
         self.sendLine('>>> brutal bot test console connected')
+
+        #from twisted.internet import task
         #loop = task.LoopingCall(self.print_loop)
         #loop.start(2.0)
 
@@ -46,7 +47,7 @@ class TestConsoleClient(basic.LineReceiver):
         self.backend.handle_event(raw_event)
 
     def bot_process_action(self, action):
-        self.sendLine('>>> got action! {0!r}'.format(action))
+        #self.sendLine('>>> got action! {0!r}'.format(action))
         if action.action_type == 'message':
             body = action.meta.get('body')
             if body:
