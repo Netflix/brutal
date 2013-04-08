@@ -1,8 +1,64 @@
 import time
-#from Queue import Queue
-from twisted.python import log
+import logging
 
 from brutal.core.constants import DEFAULT_EVENT_VERSION, DEFAULT_ACTION_VERSION
+
+# class NetworkConfig(object):
+#     __metaclass__ = PluginRoot
+#     protocol_name = None
+#
+#     def __init__(self):
+#         if self.protocol_name is None:
+#             raise NotImplementedError
+#
+
+
+class Network(object):
+    def __init__(self):
+        self.protocol = None
+        self.log_traffic = None
+        self.server = None
+        self.port = None
+        self.use_ssl = None
+
+        # network user / pass
+        self.user = None
+        self.password = None
+
+        # rooms / users
+        self.chats = None
+
+    def parse_config(self, **kwargs):
+        self.protocol = kwargs.get('protocol')
+        self.log_traffic = kwargs.get('log_traffic', False)
+        self.server = kwargs.get('server', 'localhost')
+        self.port = kwargs.get('port')
+        self.use_ssl = kwargs.get('use_ssl')
+
+        self.nick = kwargs.get('nick')
+        self.password = kwargs.get('password')
+
+        if 'channels' in kwargs:
+            self.rooms = kwargs.get('channels', [])
+        elif 'rooms' in kwargs:
+            self.rooms = kwargs.get('rooms', [])
+
+
+class Chat(object):
+    def __init__(self):
+        # room id or user id
+        self.id = None
+        self.last_active = None
+
+        self.users = None
+
+
+class Room(Chat):
+    pass
+
+
+class User(Chat):
+    pass
 
 
 class Event(object):
@@ -21,18 +77,21 @@ class Event(object):
             meta
             version
         """
+        self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
+
         self.source_bot = source_bot
         self.raw_details = raw_details
         self.time_stamp = time.time()
 
         self.event_version = DEFAULT_EVENT_VERSION
+        self.event_type = None
         self.cmd = None
         self.args = None
 
         self.source_connection_id = None
         self.source_room = None
         self.scope = None
-        self.event_type = None
+
         self.meta = None
         self.from_bot = None
 
@@ -67,9 +126,8 @@ class Event(object):
 
         if self.type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
             res = self.parse_event_cmd(self.meta['body'])
-            if res is not None:
-                self.cmd, self.args = res
-
+            if res is False:
+                self.log.debug('event not parsed as a command')
 
     def check_message_match(self, starts_with=None, regex=None):
         """
@@ -93,23 +151,23 @@ class Event(object):
     def parse_event_cmd(self, body, token=None):
         token = token or '!'  # TODO: make this configurable
         if type(body) not in (str, unicode):
-            return
+            return False
 
         split = body.split()
         if len(split):
+
             if split[0].startswith(token):
                 try:
                     cmd = split[0][1:]
                     args = split[1:]
                 except Exception as e:
-                    log.err('failed parsing cmd from {0!r}: {1!r}'.format(body, e))
+                    self.log.exception('failed parsing cmd from {0!r}: {1!r}'.format(body, e))
                 else:
-                    return cmd, args
-
-    #def add_response_action(self, action):
-        #if isinstance(action, Action):
-            #self.response.put(action)
-
+                    self.event_type = 'cmd'
+                    self.cmd = cmd
+                    self.args = args
+                    return True
+        return False
 
 class Action(object):
     """
@@ -123,7 +181,7 @@ class Action(object):
     """
     def __init__(self, source_bot, source_event=None, destination_bots=None, destination_connections=None, room=None,
                  action_type=None, meta=None):
-
+        self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
         #TODO: fix this awful import issue
         from brutal.core.bot import Bot
 
@@ -139,7 +197,7 @@ class Action(object):
         self.destination_connections = destination_connections
         if self.destination_connections is None:
             if self.source_event is None:
-                log.err('not sure what to do with this action')
+                self.log.error('not sure what to do with this action')
                 raise AttributeError
                 #self.source_event.source_connection_id
             else:
@@ -177,20 +235,19 @@ class Action(object):
 
     def msg(self, msg, room=None):
         """
-        send a msg to a channel
+        send a msg to a room
         """
         if room:
             self.destination_room = room
 
         self.action_type = 'message'
         if msg is not None:
-            self.meta['body'] = msg
-            #self._add_to_meta('body', msg)
+            self._add_to_meta('body', msg)
         return self
 
     def join(self, channel, key=None):
         """
-        if supported, join a chat channel
+        if supported, join a rooml
         """
         self.channel = channel
         self.type = 'join'
@@ -200,7 +257,7 @@ class Action(object):
 
     def part(self, channel, msg=None):
         """
-        if supported, leave a chat channel the bot is currently in
+        if supported, leave a room the bot is currently in
         """
         self.channel = channel
         self.type = 'part'
