@@ -50,12 +50,12 @@ class ProtocolBackend(object):
         takes events, tags them with the current backend, and places them on bot event_queue
         """
         if isinstance(event, Event):
-            event.connection = self
-            event.connection_id = self.id
+            event.source_client = self
+            event.source_client_id = self.id
             self.bot.new_event(event)
         elif isinstance(event, dict):
-            event['connection'] = self
-            event['connection_id'] = self.id
+            event['client'] = self
+            event['client_id'] = self.id
             self.bot.new_event(event)
         else:
             self.log.error('invalid Event passed to {0}')
