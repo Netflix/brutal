@@ -187,26 +187,52 @@ class Action(object):
     """
     def __init__(self, source_bot, source_event=None, destination_bots=None, destination_client_ids=None, rooms=None,
                  action_type=None, meta=None):
+        """
+        represents an action that the bot should handle.
+        """
         self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
-
-        # if not isinstance(source_event, Event):
-        #     raise TypeError
 
         self.source_bot = source_bot
         self.source_event = source_event
 
+        #TODO: this logic is so fucking broken. fix
+        # default to source_bot if no destinations given
         self.destination_bots = destination_bots or [self.source_bot, ]
+
         self.destination_client_ids = destination_client_ids
         self.destination_rooms = rooms
-        if self.destination_client_ids is None:
-            if self.source_event is None:
-                self.log.error('not sure what to do with this action')
-                raise AttributeError
-                #self.source_event.source_connection_id
-            else:
-                self.destination_client_ids = [self.source_event.source_client_id, ]
-        if self.destination_rooms is None:
+        self.log.debug('source: {0!r}, destination: {1!r}'.format(self.source_bot, self.destination_bots))
+
+        if source_event is not None:
+            self.destination_client_ids = [self.source_event.source_client_id, ]
             self.destination_rooms = [source_event.source_room, ]
+
+        # get client_id
+        if self.destination_client_ids is None:
+            if self.destination_bots:
+                bot = self.destination_bots[0]
+
+                conn_id = bot.connection_manager.default_connection
+
+                if conn_id is not None:
+                    self.destination_client_ids = [conn_id, ]
+                else:
+                    self.log.error('no default connections on {0!r}'.format(bot))
+                    raise AttributeError
+
+            else:
+                self.log.error('no destination bots for action')
+                raise AttributeError
+
+        if self.destination_rooms is None:
+            self.destination_rooms = []
+            #TODO: fix this shitty 'try all the things' method
+            for bot in self.destination_bots:
+                for conn_id in self.destination_client_ids:
+                    if conn_id in bot.connection_manager.clients:
+                        room = bot.connection_manager.clients[conn_id].default_room
+                        if room is not None:
+                            self.destination_rooms.append(room)
 
         self.time_stamp = time.time()
         self.action_version = DEFAULT_ACTION_VERSION
@@ -217,6 +243,8 @@ class Action(object):
 
         self.action_type = action_type
         self.meta = meta or {}
+
+        self.log.debug('end')
 
     def __repr__(self):
         return "<{0} {1}:{2} dest:{3}>".format(self.__class__.__name__, self.source_bot.nick, self.action_type,
