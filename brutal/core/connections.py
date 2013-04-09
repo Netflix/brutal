@@ -96,10 +96,9 @@ class ConnectionManager(object):
                         self.log.debug('queuing action {0!r} on client {1!r}'.format(action, self.clients[client_id]))
                         self.clients[client_id].queue_action(action)
 
-
     @property
-    def default_destination(self):
+    def default_connection(self):
         for client in self.clients:
-            return client.default_room
+            return client #.default_room
         self.log.error('unable to get default client on {0!r}'.format(self))
 
