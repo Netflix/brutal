@@ -1,6 +1,5 @@
 import logging
 
-from twisted.python import log
 from twisted.internet.task import LoopingCall
 from twisted.words.protocols.jabber import jid
 
@@ -23,6 +22,7 @@ class MucBot(muc.MUCClient):
     def __init__(self, rooms,  nick, backend):
         super(MucBot, self).__init__()
 
+        self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
         self.backend = backend
 
         self.raw_rooms = rooms or []
@@ -43,24 +43,25 @@ class MucBot(muc.MUCClient):
         super(MucBot, self).connectionInitialized()
 
         def joined_room(room):
-            print 'ROOM: {0!r}'.format(room.__dict__)
+            self.log.debug('joined room: {0!r}'.format(room.__dict__))
             if room.locked:
-                log.err('room locked?')
+                self.log.error('room locked?')
                 return self.configure(room.roomJID, {})
 
         def join_room(room_jid):
             d = self.join(room_jid, self.nick)
             d.addCallback(joined_room)
             #d.addCallback(lambda _: log.msg("joined room"))
-            d.addErrback(log.err, 'join of {0!r} failed'.format(room_jid))
+            d.addErrback(self.log.error, 'join of {0!r} failed'.format(room_jid))
 
         for room in self.room_jids:
             join_room(room[0])
 
-        log.err()
-
     def receivedGroupChat(self, room, user, message):
-        log.msg('groupchat - user: {0}, room: {1!r}, msg: {2!r}'.format(user, room, message), logLevel=logging.DEBUG)
+        self.log.debug('groupchat - user: {0}, room: {1!r}, msg: {2!r}'.format(user, room, message.body))
+        if user is None:
+            self.log.error('groupchat recieved from None?')
+            return
 
         event_data = {'type': 'message', 'scope': 'public', 'room': room.roomJID.full(), 'meta': {'from': user.nick,
                                                                                                   'body': message.body}}
@@ -68,7 +69,7 @@ class MucBot(muc.MUCClient):
         if user.nick == self.nick:
             event_data['from_bot'] = True
 
-        log.msg('event_data: {0!r}'.format(event_data), logLevel=logging.DEBUG)
+        self.log.debug('event_data: {0!r}'.format(event_data))
         # log.msg('room: {0!r}, room.nick: {1!r}'.format(room, room.nick), logLevel=logging.DEBUG)
         # log.msg('roomJID: {0!s}, full: {1!r}, host: {2!r}, resource: {3!r}, user: {4!r}'.format(room.roomJID,
         #                                                                                         room.roomJID.full,
@@ -93,7 +94,6 @@ class ClientKeepalive(XMPPHandler):
         self.interval = interval or self.DEFAULT_INTERVAL
 
     def space(self):
-        #print '*** SENDING KEEPALIVE ***'
         #self.xmlstream.send(' ')
         self.send(' ')
 
@@ -127,7 +127,7 @@ class XmppBackend(ProtocolBackend):
             try:
                 self.keepalive_freq = float(self.keepalive_freq)
             except Exception as e:
-                log.err('invalid keepalive passed in, {0!r}: {1!r}'.format(self.keepalive_freq, e))
+                self.log.error('invalid keepalive passed in, {0!r}: {1!r}'.format(self.keepalive_freq, e))
                 self.keepalive_freq = None
 
         #TODO: have this default to botname @ .
@@ -170,7 +170,7 @@ class XmppBackend(ProtocolBackend):
         self.keepalive.setHandlerParent(self.client)
 
     def handle_action(self, action):
-        log.msg('XmppBackend got ACTION!: {0!r}'.format(action))
+        #self.log.debug(': {0!r}'.format(action))
 
         if action.action_type == 'message':
             body = action.meta.get('body')

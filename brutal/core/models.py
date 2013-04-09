@@ -201,7 +201,7 @@ class Action(object):
 
         self.destination_client_ids = destination_client_ids
         self.destination_rooms = rooms
-        self.log.debug('source: {0!r}, destination: {1!r}'.format(self.source_bot, self.destination_bots))
+        #self.log.debug('source: {0!r}, destination: {1!r}'.format(self.source_bot, self.destination_bots))
 
         if source_event is not None:
             self.destination_client_ids = [self.source_event.source_client_id, ]
@@ -243,8 +243,6 @@ class Action(object):
 
         self.action_type = action_type
         self.meta = meta or {}
-
-        self.log.debug('end')
 
     def __repr__(self):
         return "<{0} {1}:{2} dest:{3}>".format(self.__class__.__name__, self.source_bot.nick, self.action_type,
