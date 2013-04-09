@@ -105,6 +105,7 @@ class Bot(object):
                 responses = self.plugin_manager.process_event(event)
                 # this is going to be a list of deferreds,
                 # TODO: should probably do this differently
+                #self.log.debug('HERE: {0!r}'.format(responses))
                 for response in responses:
                     #self.log.debug('adding response router')
                     response.addCallback(self.route_response, event)
@@ -155,12 +156,13 @@ class Bot(object):
 
     # PLUGIN SYSTEM #################################################
     def route_response(self, response, event):
-        self.log.debug('got {0!r} from {1!r}'.format(response, event))
-        #TODO: update to actually route to correct bot, for now we just assume its ours
-        if isinstance(response, Action):
-            self.action_queue.put(response)
-        else:
-            self.log.error('got invalid response type')
+        if response is not None:
+            self.log.debug('got {0!r} from {1!r}'.format(response, event))
+            #TODO: update to actually route to correct bot, for now we just assume its ours
+            if isinstance(response, Action):
+                self.action_queue.put(response)
+            else:
+                self.log.error('got invalid response type')
 
     def process_action(self, action):
         #self.log.debug('routing response: {0}'.format(action))
@@ -187,7 +189,7 @@ class BotManager(object):
         self.bots = {}
         # not sure about this...
         # {'bot_name': {'connections':[], ....}, }
-        # bot -> {partyline:,othershit?}
+        # bot -> {partyline:_, otherstuff?}
         # NETWORKED PARTY LINES WOULD BE HOT FIRE
 
         #self.tasks = Queue()
