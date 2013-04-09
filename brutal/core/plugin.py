@@ -112,6 +112,7 @@ def event(func=None, event_type=None, thread=False):
         return decorator(func)
 
 
+#TODO: maybe swap this to functools.partial
 def match(func=None, regex=None, thread=False):
     """
     this decorator is used to create a command the bot will respond to.
@@ -356,7 +357,6 @@ class PluginManager(object):
                         self.event_parsers[parser.event_type] = [parser, ]
 
     # event processing
-    # ugh i need to fix this. I'm not sure i even understand why this works.
     @defer.inlineCallbacks
     def _run_event_processor(self, event_parser, event, *args):
         run = True
@@ -378,8 +378,6 @@ class PluginManager(object):
 
         defer.returnValue(response)
 
-    #TODO: this probably doesn't need to be wrapped anymore.
-    #@defer.inlineCallbacks
     def process_event(self, event):
         #TODO: this needs some love
 
@@ -484,14 +482,32 @@ class BotPlugin(object):
         # yes.
         self._delayed_tasks[:] = [d for d in self._delayed_tasks if d.called()]
 
-    def _handle_task_response(self, *args, **kwargs):
-        self.log.debug('PLUGIN TASK RESULTS:')
+    def _handle_task_response(self, response, *args, **kwargs):
+        self.log.debug('PLUGIN TASK RESULTS: {0!r}'.format(response))
         self.log.debug('TASK ARGS: {0!r}'.format(args))
         self.log.debug('TASK KWARGS: {0!r}'.format(kwargs))
-        #TODO: WHERE DO I DIRECT THIS RESPONSE? FUCK
-        # if len(args) == 1:
-        #     if type(args[0]) in (str, unicode):
-        #
+        # hacking this in for now:
+        event = kwargs.get('event')
+        try:
+            a = self.build_action(action_data=response, event=event)
+        except Exception:
+            self.log.exception('failed to build action from plugin task {0!r}, {1!r}, {2!r}'.format(response, args,
+                                                                                                    kwargs))
+        else:
+            self.log.debug('wat: {0!r}'.format(a))
+            if a is not None:
+                self._queue_action(a, event)
+
+    def build_action(self, action_data, event=None):
+        #TODO this is hacky - fix it.
+        if type(action_data) in (str, unicode):
+            try:
+                a = Action(source_bot=self.bot, source_event=event).msg(action_data)
+            except Exception:
+                logging.exception('failed to build action from {0!r}, for {1!r}'.format(action_data, event))
+            else:
+                return a
+
 
     @defer.inlineCallbacks
     def _plugin_task_runner(self, func, *args, **kwargs):
@@ -503,7 +519,7 @@ class BotPlugin(object):
                 self.log.debug('executing plugin task')  # add func details
                 response = yield func(*args, **kwargs)
 
-            yield self._handle_task_response(response)
+            yield self._handle_task_response(response, *args, **kwargs)
             # defer.returnValue(response)
         except Exception as e:
             self.log.error('_plugin_task_runner failed: {0!r}'.format(e))
