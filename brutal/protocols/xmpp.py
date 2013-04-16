@@ -132,7 +132,7 @@ class XmppBackend(ProtocolBackend):
 
         #TODO: have this default to botname @ .
         self.jabber_id = kwargs.get('jabber_id', self.nick + '@' + self.server)
-        #self.room_jabber_id =  # do we need this for servers that are busted to fuck?
+        #self.room_jabber_id =  # do we need this for servers that act wonky? maybe.
         self.password = kwargs.get('password')
 
         self.rooms = kwargs.get('rooms')
