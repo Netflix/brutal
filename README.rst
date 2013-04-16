@@ -9,6 +9,3 @@ Documentation
 -------------
 
 See http://brutal.readthedocs.org
-
-License
--------
