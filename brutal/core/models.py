@@ -195,7 +195,7 @@ class Action(object):
         self.source_bot = source_bot
         self.source_event = source_event
 
-        #TODO: this logic is so fucking broken. fix
+        #TODO: this logic is so broken. fix
         # default to source_bot if no destinations given
         self.destination_bots = destination_bots or [self.source_bot, ]
 
@@ -226,7 +226,7 @@ class Action(object):
 
         if self.destination_rooms is None:
             self.destination_rooms = []
-            #TODO: fix this shitty 'try all the things' method
+            #TODO: fix this 'try all the things' method
             for bot in self.destination_bots:
                 for conn_id in self.destination_client_ids:
                     if conn_id in bot.connection_manager.clients:

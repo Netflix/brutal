@@ -1,1 +1,0 @@
-add requirements.txt to spawn template

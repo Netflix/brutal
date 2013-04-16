@@ -176,7 +176,7 @@ class BotManager(object):
     """
     Handles herding of all bottes, responsible for spinning up and shutting down
     """
-    #TODO: fill this shit out, needs to read config or handle config object?
+    #TODO: fill this out, needs to read config or handle config object?
     def __init__(self, config=None):
         if config is None:
             raise AttributeError("No config passed to manager.")
