@@ -2,4 +2,13 @@
 brutal
 ======
 
-an asyc centered chat bot framework for python programmers
+An asyc centered chat bot framework for python programmers written using the twisted framework.
+
+
+Documentation
+-------------
+
+See http://brutal.readthedocs.org
+
+License
+-------
