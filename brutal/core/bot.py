@@ -1,236 +1,246 @@
-import inspect
-from Queue import Queue
-from twisted.internet import reactor, task, defer, threads
+import uuid
+import logging
 
-from brutal.protocols.irc import IrcBotteFactory
-from brutal.core.plugin import BotPlugin
+from twisted.internet import reactor
+from twisted.internet import task, defer
+from brutal.core.connections import ConnectionManager
+
+from brutal.core.plugin import PluginManager
 from brutal.core.models import Event, Action
 
-OFF = 0
-ON = 1
-DISCONNECTED = 20
-CONNECTED = 30
+from brutal.core.constants import *
+
 
 class Bot(object):
-    def __init__(self, name='test_bot', network=None, port=None, channels=None):
+    def __init__(self, nick, connections, *args, **kwargs):
+        """
+        acts as a connection manager, middle man for incoming events, and processor of outgoing actions.
+        """
         #TODO: maybe support a custom internal key to keep track of bots, not just by 'name'...
-        #TODO: if we do it by name, make sure we dont have name dupes, even between networks :-/
+        #TODO: if we do it by name, make sure we don't have name dupes, even between networks :-/
 
-        self.name = name
-
-        self.protocol_backend = None
-        #todo: remove this, its only used in connect and str, useless, stops from having multiple connections
-        self.type = 'irc'
-
-        self.channels = channels or []
-        # make this support multiple networks?
-        self.network = network #(have networks read from a queue and use the origin bot to send)
-        self.port = port # should have a check in here to default the port
-
-        self.log = None
-
-        #twisted factory
-        self.factories = []
+        # bot id
+        self.nick = nick
+        self.id = str(uuid.uuid1())
+        self.log = logging.getLogger('{0}.{1}.{2}'.format(self.__class__.__module__, self.__class__.__name__,
+                                                          self.nick))
+        self.log.info('starting bot')
 
         #bot manager instance
-        self.manager = None
+        self.bot_manager = None
 
-        self.active_plugins = []
+        # setup this bots event queue / consumer, action queue/consumer
+        self.event_queue = defer.DeferredQueue()
+        self._consume_events(self.event_queue)
+
+        self.action_queue = defer.DeferredQueue()
+        self._consume_actions(self.action_queue)
+
+        # setup plugins
+        self.enabled_plugins = kwargs.get('enabled_plugins')
+        self.plugin_manager = PluginManager(bot=self)
+        # self.manager.config.PLUGINS:
+
+        # build connections
+        # TODO: create connection manager
+        self.connection_manager = ConnectionManager(config=connections, bot=self)
+        self.log.debug('connections on {0!r}: {1!r}'.format(self.nick, self.connection_manager))
+
+        # should have a 'ready' state that we should check before starting?
         self.state = OFF
         self.party_line = None
 
-        self.commands = {}
-        self.event_parsers = {}
+    def __repr__(self):
+        return '<{0}: {1!r} ({2!s})>'.format(self.__class__.__name__, self.nick, self.id)
 
-    def new_action(self):
-        a = Action(destination_bot=self)
-        return a
+    def __str__(self):
+        return repr(self)
 
-    def build_event(self, event_data):
-        #todo: needs to be safe
-        channel = event_data['channel']
-        type = event_data['type']
-        meta = event_data['meta']
-
-        server_info = event_data['server_info']
-        event_version = event_data['event_version']
-
-        e = Event(source_bot=self, channel=channel, type=type, meta=meta, server_info=server_info, version=event_version)
-        return e
-
-    def new_event(self, raw_event):
-        if self.state >= ON:
-            event = self.build_event(raw_event)
-            d = self.handle_event(event)
-            #event_deferred.pause()
-            return d
-
-    @defer.inlineCallbacks
-    def handle_event(self, event):
-        response = yield threads.deferToThread(self.process_event, event)
-        defer.returnValue(event)
-
-
-    def process_event(self, event):
-        #run through event parsers
-        for name, event_parser in self.event_parsers.items():
-            response = event_parser(event)
-            if type(response) in (str, unicode):
-                a = self.new_action().msg(event.channel, response)
-                event.add_response_action(a)
-
-        #check cmds
-        if event.cmd is not None and event.cmd in self.commands:
-            #fix this...
-            response = self.commands[event.cmd](event)
-            if type(response) in (str, unicode):
-                a = self.new_action().msg(event.channel, response)
-                event.add_response_action(a)
-
-        return event
-
-
-#    def process_plugins(self, event):
-#        if event.cmd:
-#            if event.cmd in self.commands:
-#                res = self.commands[event.cmd]()
-#                print res
-##        for plugin in self.active_plugins:
-##            plugin.handle_event(event)
-#        return event
+    # CORE
 
     def start(self):
+        #TODO: catch failures?
+        #TODO: pass enabled plugins
+        self.plugin_manager.start(self.enabled_plugins)
+        self.connection_manager.connect()
         self.state = ON
-        self.build_plugins()
-        #print 'enabled plugins:\n{0}'.format(repr(self.active_plugins))
-        self.find_brutal_functions()
-        #print 'LOADED COMMANDS:'
-        #print repr(self.commands)
-        #print 'LOADED EVENT PARSERS:'
-        #print repr(self.event_parsers)
-        self.connect()
 
-
-    def find_brutal_functions(self):
-        #load freestanding functions
-        for module in self.manager.config.PLUGINS:
-            self._register_brutal_plugin_functions(module)
-
-        #load plugin class cmd methods
-        for plugin_instance in self.active_plugins:
-            self._register_brutal_plugin_class_functions(plugin_instance)
-
-    def _register_brutal_plugin_functions(self, plugin_module):
-        module_name = plugin_module.__name__
-        for func_name, func in inspect.getmembers(plugin_module, inspect.isfunction):
-            if getattr(func, '__brutal_cmd', False):
-                command = (getattr(func, '__brutal_cmd_trigger', None) or func_name).lower()
-
-                if command in self.commands:
-                    command = module_name + '.' + command
-
-                    if command in self.commands:
-                        continue #fail better here...
-                self.commands[command] = func
-            elif getattr(func, '__brutal_parser', False):
-                parser = func_name.lower()
-                if parser in self.event_parsers:
-                    parser = module_name + '.' + parser
-
-                    if parser in self.event_parsers:
-                        continue
-                self.event_parsers[parser] = func
-
-    def _register_brutal_plugin_class_functions(self, plugin_instance):
-        class_name = plugin_instance.__class__.__name__.lower()
-        for func_name, func in inspect.getmembers(plugin_instance, inspect.ismethod):
-            if getattr(func, '__brutal_cmd', False):
-                command = (getattr(func, '__brutal_cmd_command', None) or func_name).lower()
-
-                if command in self.commands:
-                    command = class_name + '.' + command
-
-                    if command in self.commands:
-                        continue #fail better here...
-                self.commands[command] = func
-            elif getattr(func, '__brutal_parser', False):
-                parser = class_name + '.' + func_name.lower()
-                if parser in self.event_parsers:
-                    continue
-                self.event_parsers[parser] = func
-
-    def build_plugins(self):
-        for plugin in BotPlugin.plugins:
-            instance = plugin(self)
-            instance.setup()
-            self.active_plugins.append(instance)
-
-    def connect(self): #master_event_handler):
-        #maybe i should just remove the ability to pass in master_event_handler...
-        if self.type == 'irc':
-            self.factory = IrcBotteFactory(self.channels, nickname=self.name, bot=self)
-
-        if self.factory is not None and self.network is not None and self.port is not None:
-            reactor.connectTCP(self.network, self.port, self.factory)
-            #connectSSL for ssl connections...
-
+    # review
     def stop(self):
         """
-        TODO: uh.... wut
+        TODO: placeholder
         """
         if self.state >= ON:
             self.state = OFF
 
-    def __str__(self):
-        return '<Bot: {0}, {1}, {2}, {3}>'.format(self.name, self.type, self.network, self.port)
+    # review
+    def pause(self):
+        """
+        placeholder
+        """
+        pass
+
+    def default_destination(self):
+        """
+        if no destination room is defined, and no event triggered an action, determine where to send results
+
+        NOTE: for now send everywhere...
+        """
+        pass
+
+    # EVENT QUEUE
+    # default event consumer queue.
+    def _consume_events(self, queue):
+        def consumer(event):
+            # check if Event, else try to make it one
+            if not isinstance(event, Event):
+                try:
+                    event = self.build_event(event)
+                except Exception as e:
+                    self.log.exception('unable to parse data to Event, {0!r}: {1!r}'.format(event, e))
+                    event = None
+
+            if event is not None:
+                self.log.debug('EVENT on {0!r} {1!r}'.format(self, event))
+                responses = self.plugin_manager.process_event(event)
+                # this is going to be a list of deferreds,
+                # TODO: should probably do this differently
+                #self.log.debug('HERE: {0!r}'.format(responses))
+                for response in responses:
+                    #self.log.debug('adding response router')
+                    response.addCallback(self.route_response, event)
+
+            queue.get().addCallback(consumer)
+        queue.get().addCallback(consumer)
+
+    def new_event(self, event):
+        """
+        this is what protocol backends call when they get an event.
+        """
+        self.event_queue.put(event)
+
+    def build_event(self, event_data):
+        #todo: needs to be safe
+        try:
+            e = Event(source_bot=self, raw_details=event_data)
+        except Exception as e:
+            self.log.exception('failed to build event from {0!r}: {1!r}'.format(event_data, e))
+        else:
+            return e
+
+    # ACTION QUEUE
+    # default action consumer
+    def _consume_actions(self, queue):
+        def consumer(action):
+            # check if Action, else try to make it one
+            if not isinstance(action, Action):
+                try:
+                    action = self.build_action(action)
+                except Exception as e:
+                    self.log.exception('unable to build Action with {0!r}: {1!r}'.format(action, e))
+
+            if action is not None:
+                res = defer.maybeDeferred(self.process_action, action)
+
+            queue.get().addCallback(consumer)
+        queue.get().addCallback(consumer)
+
+    def build_action(self, action_data, event=None):
+        if type(action_data) in (str, unicode):
+            try:
+                a = Action(source_bot=self, source_event=event).msg(action_data)
+            except Exception as e:
+                self.log.exception('failed to build action from {0!r}, for {1!r}: {2!r}'.format(action_data, event, e))
+            else:
+                return a
+
+    # PLUGIN SYSTEM #################################################
+    def route_response(self, response, event):
+        if response is not None:
+            self.log.debug('got {0!r} from {1!r}'.format(response, event))
+            #TODO: update to actually route to correct bot, for now we just assume its ours
+            if isinstance(response, Action):
+                self.action_queue.put(response)
+            else:
+                self.log.error('got invalid response type')
+
+    def process_action(self, action):
+        #self.log.debug('routing response: {0}'.format(action))
+        self.connection_manager.route_action(action)
+        # for client_id, client in self.connection_manager..items():
+        #     if conn.id is not None and conn.id in action.destination_connections:
+        #         conn.queue_action(action)
+
 
 class BotManager(object):
     """
-    Handles all bottes, responsible for spinning up and shutting down
+    Handles herding of all bottes, responsible for spinning up and shutting down
     """
-    #TODO: fill this shit out, needs to read config or handle config object?
+    #TODO: fill this out, needs to read config or handle config object?
     def __init__(self, config=None):
         if config is None:
-            raise AttributeError, "No config passed to manager."
-        self.config = config
+            raise AttributeError("No config passed to manager.")
 
-        self.bottes = []
-        # bot -> {partyline:,othershit?}
+        self.log = logging.getLogger('{0}.{1}'.format(self.__class__.__module__, self.__class__.__name__))
+
+        self.config = config
+        self.log.debug('config: {0!r}'.format(self.config))
+
+        self.bots = {}
+        # not sure about this...
+        # {'bot_name': {'connections':[], ....}, }
+        # bot -> {partyline:_, otherstuff?}
         # NETWORKED PARTY LINES WOULD BE HOT FIRE
 
-        self.tasks = Queue()
+        #self.tasks = Queue()
         self.event_handler = None
+
+        # build bottes from config
         self.setup()
 
         self.delete_this = 0
 
+    def __repr__(self):
+        return '<{0}: {1!r}>'.format(self.__class__.__name__, self.bots)
+
+    def __str(self):
+        return repr(self)
+
     def setup(self):
-        #self.event_handler = EventHandler()
+        bots = getattr(self.config, 'BOTS', None)
 
-        #check these, parse
-        # this needs to change with support of multipe bots
-        name = getattr(self.config, 'BOT_NAME')
-        network = getattr(self.config, 'BOT_NETWORK')
-        channels = getattr(self.config, 'BOT_CHANNELS')
+        self.log.debug('bots: {0!r}'.format(bots))
 
-        self.create_bot(name, network=network, port=6667, channels=channels)
+        if bots is not None and isinstance(bots, list):
+            for bot_config in bots:
+                if isinstance(bot_config, dict):
+                    self.create_bot(**bot_config)
+        else:
+            self.log.warning('no bots found in configuration')
 
     def update(self):
-        #print 'manager loop called'
+        self.log.debug('manager loop called')
         pass
-
 
     def create_bot(self, *args, **kwargs):
         bot = Bot(*args, **kwargs)
-        bot.manager = self
-        # fire it up!
-        bot.start()
+        bot.bot_manager = self
+
         #todo: check if startup worked?
-        self.bottes.append(bot)
+        self.bots[bot.nick] = {'bot': bot}
+
+    def start_bots(self):
+        for bot_id in self.bots:
+            # dont like this. change.
+            self.bots[bot_id]['bot'].start()
 
     def start(self):
         """
         starts the manager
         """
+        self.start_bots()
+
         loop = task.LoopingCall(self.update)
         loop.start(30.0)
+
+        reactor.run()
