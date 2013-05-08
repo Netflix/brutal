@@ -17,7 +17,7 @@ written using twisted libraries for native async support.
 Code
 --------
 
-brutal is actively developed on GitHub. You can find the repo `here <https://github.com/q/brutal>`_.
+brutal is actively developed on GitHub. You can find the repo `here <https://github.com/Netflix/brutal>`_.
 
 
 Feature Support
@@ -26,7 +26,7 @@ Feature Support
 - IRC
 - XMPP
 - Everything runs async by default.
-- Threading support exists for explicitly defined blocking code
+- Thread pool support exists for explicitly defined blocking code
 
 
 User Guide
