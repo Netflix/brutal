@@ -14,7 +14,7 @@ setup(
     author='Corey Bertram',
     author_email='corey@qr7.com',
 
-    url='https://github.com/q/brutal',
+    url='https://github.com/Netflix/brutal',
 
     scripts=['brutal/bin/brutal-overlord.py', ],
 
