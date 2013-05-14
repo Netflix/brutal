@@ -7,7 +7,7 @@ Basic Plugins
 =============
 
 Writing brutal plugins is meant to be easy. By nature, a bot responds to events within a chat system. Everything brutal
-sees is an ``Event`` object and it is possible to write plugins that only respond to specific ``!command`` in a channel or
+sees is an ``Event`` object and it is possible to write plugins that only respond to a specific ``!command`` in a channel or
 an event parser that responds to certain or all types of events.
 
 
@@ -29,7 +29,7 @@ If you just want to make a command that the bot will respond to, all you have to
 basic events
 ------------
 
-If you want to register an parser to handle events, you can easily do this as well.::
+If you want to register a parser to handle events, you can easily do this as well::
 
     from brutal.core.plugin import event
 
@@ -44,7 +44,7 @@ This will respond to every action a bot sees in a channel with a message.
 basic matching
 --------------
 
-It is also possible to write a parser that responds to a given regex.::
+It is also possible to write a parser that responds to a given regex::
 
     from brutal.core.plugin import match
 
@@ -59,7 +59,7 @@ blocking code
 -------------
 
 Sometimes its hard to write async code. Rather than limit you to other bot frameworks, brutal has built in support for
-code that blocks. You simple have to let it know that your code is not async by passing in ``thread=True``.::
+code that blocks. You simply have to let it know that your code is not async by passing in ``thread=True``::
 
     import time  # blocking lib
     from brutal.core.plugin import cmd, event
@@ -75,7 +75,7 @@ code that blocks. You simple have to let it know that your code is not async by 
         return 'SOOOOOO sleepy'
 
 Every time these trigger, they get put into a global thread pool that brutal maintains for you. If your code blocks for
-too long, you risk the chance of the thread pool getting incredibly backed up so some thought must be put into what
+too long you risk the chance of the thread pool getting incredibly backed up so some thought must be put into what
 you're blocking for. It is recommended that you try to write asynchronous code using the brutal and twisted utilities.
 
 
