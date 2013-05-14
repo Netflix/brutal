@@ -14,7 +14,7 @@ setup(
     author='Corey Bertram',
     author_email='corey@qr7.com',
 
-    url='https://github.com/q/brutal',
+    url='https://github.com/Netflix/brutal',
 
     scripts=['brutal/bin/brutal-overlord.py', ],
 
@@ -25,6 +25,8 @@ setup(
 
     install_requires=[
         'Twisted >= 12.1.0',
+        'wokkel == 0.7.1',
+        'pyOpenSSL == 0.13',
     ],
 
     keywords='twisted',

@@ -31,7 +31,7 @@ basic events
 
 If you want to register an parser to handle events, you can easily do this as well.::
 
-    from brutal.core.plugin event
+    from brutal.core.plugin import event
 
     @event
     def test_event_parser(event):
@@ -46,7 +46,7 @@ basic matching
 
 It is also possible to write a parser that responds to a given regex.::
 
-    from brutal.core.plugin match
+    from brutal.core.plugin import match
 
     @match(regex=r'^hi$')
     def matcher(event):
