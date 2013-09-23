@@ -182,3 +182,13 @@ class XmppBackend(ProtocolBackend):
                             room_jid = jid.internJID(room)
                             message = muc.GroupChat(recipient=room_jid, body=body)
                             self.client.send(message.toElement())
+        if action.action_type == 'subject':
+            new_subject = action.meta.get('body')
+            if new_subject:
+                if action.destination_rooms:
+                    for room in action.destination_rooms:
+                        if action.scope == 'public':
+                            # TODO: replace this with an actual room lookup of known rooms
+                            room_jid = jid.internJID(room)
+                            message = muc.GroupChat(recipient=room_jid, subject=new_subject)
+                            self.client.send(message.toElement())
