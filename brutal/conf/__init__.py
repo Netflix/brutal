@@ -1,6 +1,7 @@
 import importlib
 import os
 import logging
+import traceback
 
 from brutal.conf import global_config
 
@@ -61,7 +62,9 @@ class BrutalConfig(object):
         try:
             config = importlib.import_module(self.CONFIG_MODULE)
         except ImportError:
-            raise ImportError('{0} module cannot be found in sys.path'.format(self.CONFIG_MODULE))
+            message = '{0} module cannot be found in sys.path. Full Stack Trace: {1}'.format(self.CONFIG_MODULE, traceback.format_exc())
+            self.log.exception(message)
+            raise ImportError(message)
         else:
             self.log.debug('got config {0!r}: {1!r}'.format(self.CONFIG_MODULE, config))
 
@@ -80,8 +83,9 @@ class BrutalConfig(object):
                 self.log.debug('loading plugin: {0!r}'.format(plugin))
                 module = importlib.import_module(plugin)
             except ImportError:
-                self.log.exception('{0} module cannot be found in sys.path'.format(plugin))
-                raise ImportError('{0} module cannot be found in sys.path'.format(plugin))
+                message = '{0} module cannot be found in sys.path. Full Stack Trace: {1}'.format(plugin, traceback.format_exc())
+                self.log.exception(message)
+                raise ImportError(message)
             else:
                 self.log.debug('success!')
                 self.PLUGINS.append(module)
