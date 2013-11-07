@@ -555,6 +555,10 @@ class BotPlugin(object):
         a = Action(source_bot=self.bot, source_event=event).msg(msg, room=room)
         self._queue_action(a, event)
 
+    def subject(self, msg, room=None, event=None):
+        a = Action(source_bot=self.bot, source_event=event).subject(msg, room=room)
+        self._queue_action(a, event)
+
     # internal
 
     def enable(self):

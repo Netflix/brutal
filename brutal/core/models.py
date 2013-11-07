@@ -182,6 +182,7 @@ class Action(object):
 
     action types:
         msg
+        subject
         join
         part
     """
@@ -268,6 +269,18 @@ class Action(object):
             self.destination_room = room
 
         self.action_type = 'message'
+        if msg is not None:
+            self._add_to_meta('body', msg)
+        return self
+
+    def subject(self, msg, room=None):
+        """
+        send a msg to a room
+        """
+        if room:
+            self.destination_room = room
+
+        self.action_type = 'subject'
         if msg is not None:
             self._add_to_meta('body', msg)
         return self
