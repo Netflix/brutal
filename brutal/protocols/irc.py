@@ -402,12 +402,12 @@ class SimpleIrcBotProtocol(irc.IRCClient):
         if action.action_type == 'message':
             body = action.meta.get('body')
             if body:
-                dest = action.destination_room
-                if dest:
-                    if dest[0] == '#':
-                        self.say(dest, body)
-                    else:
-                        self.msg(dest, body)
+                for dest in action.destination_rooms:
+                    if dest:
+                        if dest[0] == '#':
+                            self.say(dest, body)
+                        else:
+                            self.msg(dest, body)
 
 
 class IrcBotClient(protocol.ReconnectingClientFactory):
