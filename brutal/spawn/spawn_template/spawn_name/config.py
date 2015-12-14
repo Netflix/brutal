@@ -27,7 +27,7 @@ BOTS = [
             #     'port': 6667,
             #     'use_ssl': False, # default or irc
             #     'password': '',
-            #     'channels': ['room', ('private_room', 'pass')]
+            #     'channels': ['#room', ('#private_room', 'pass')]
             # }
         ],
         'enabled_plugins': {
@@ -45,7 +45,7 @@ BOTS = [
     #             'port': 6667,
     #             'use_ssl': False, # default or irc
     #             'password': '',
-    #             'channels': ['room', ('private_room', 'pass')]
+    #             'channels': ['#room', ('#private_room', 'pass')]
     #         }
     #     ],
     #     'plugin_settings': {}
