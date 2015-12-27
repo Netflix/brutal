@@ -40,7 +40,7 @@ def test_event_parser(event):
 class TestPlugin(BotPlugin):
     def setup(self, *args, **kwargs):
         self.log.debug('SETUP CALLED')
-        self.count = 0
+        self.counter = 0
         self.loop_task(5, self.test_loop, now=False)
         self.delay_task(10, self.future_task)
 
@@ -71,8 +71,8 @@ class TestPlugin(BotPlugin):
 
     @cmd
     def count(self, event):
-        self.count += 1
-        return 'count {1!r} from class! got {0!r}'.format(event, self.count)
+        self.counter += 1
+        return 'count {1!r} from class! got {0!r}'.format(event, self.counter)
 
     @cmd(thread=True)
     def inlinemsg(self, event):
