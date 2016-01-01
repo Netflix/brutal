@@ -48,6 +48,7 @@ BOTS = [
     #             'channels': ['room', ('private_room', 'pass')]
     #         }
     #     ],
-    #     'plugin_settings': {}
+    #     'plugin_settings': {},
+    #     'command_token': '.'
     # }
 ]

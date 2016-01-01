@@ -12,7 +12,7 @@ from brutal.core.constants import *
 
 
 class Bot(object):
-    def __init__(self, nick, connections, *args, **kwargs):
+    def __init__(self, nick, connections, command_token='!', *args, **kwargs):
         """
         acts as a connection manager, middle man for incoming events, and processor of outgoing actions.
         """
@@ -22,6 +22,7 @@ class Bot(object):
         # bot id
         self.nick = nick
         self.id = str(uuid.uuid1())
+        self.command_token = command_token
         self.log = logging.getLogger('{0}.{1}.{2}'.format(self.__class__.__module__, self.__class__.__name__,
                                                           self.nick))
         self.log.info('starting bot')

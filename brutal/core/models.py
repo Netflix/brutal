@@ -130,7 +130,7 @@ class Event(object):
             self.from_bot = False
 
         if self.event_type == 'message' and isinstance(self.meta, dict) and 'body' in self.meta:
-            res = self.parse_event_cmd(self.meta['body'])
+            res = self.parse_event_cmd(self.meta['body'], self.source_bot.command_token)
             # if res is False:
             #     self.log.debug('event not parsed as a command')
 
